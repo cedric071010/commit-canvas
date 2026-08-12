@@ -1,0 +1,13 @@
+{
+  "name": "commit-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first educational GitHub contribution graph drawing tool.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "serve": "node scripts/serve.mjs",
+    "test": "node --test",
+    "check": "node --check scripts/serve.mjs && node --test"
+  }
+}

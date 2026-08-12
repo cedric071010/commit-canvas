@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Commit Canvas 是一个本地运行的 GitHub 贡献图绘画与脚本预览教育工具。">
+  <meta name="theme-color" content="#f3f0e6">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Commit Canvas · 提交画布</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d3226'/%3E%3Cpath d='M18 42c15 1 25-7 29-25-18 3-27 11-29 25Z' fill='%238ccf8b'/%3E%3Cpath d='M17 47c7-12 15-19 27-26' fill='none' stroke='%23f7f2df' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#canvas-heading">跳到画布</a>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Commit Canvas 首页">
+      <span class="brand-mark" aria-hidden="true">⌁</span>
+      <span>
+        <strong>COMMIT CANVAS</strong>
+        <small>提交画布 · 本地教育工具</small>
+      </span>
+    </a>
+    <div class="header-note">
+      <span class="privacy-dot" aria-hidden="true"></span>
+      仅在浏览器本地运行 · 不连接 GitHub
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">BOTANICAL GIT NOTEBOOK / 01</p>
+        <h1 id="page-title">把想法种进<br><em>贡献日历</em></h1>
+        <p class="lede">在 53 × 7 的格纸上设计图案，导出可逐行检查的本地 Git 脚本。它不会登录账号、索取 Token 或替你推送。</p>
+      </div>
+      <aside class="ethics-note" aria-label="教育用途说明">
+        <span class="note-pin" aria-hidden="true"></span>
+        <strong>教育实验，不是履历证明</strong>
+        <p>装饰性提交不等于工作成果。请只在你拥有的全新独立练习仓库中使用，并在运行前审阅脚本。</p>
+      </aside>
+    </section>
+
+    <section class="workspace" aria-labelledby="canvas-heading">
+      <div class="workspace-topline">
+        <div>
+          <p class="section-kicker">DRAWING DESK</p>
+          <h2 id="canvas-heading">画布</h2>
+        </div>
+        <div class="history-actions" aria-label="编辑历史">
+          <button class="button button-quiet" id="undo-button" type="button" disabled><span aria-hidden="true">↶</span> 撤销 <kbd>Ctrl Z</kbd></button>
+          <button class="button button-quiet" id="redo-button" type="button" disabled><span aria-hidden="true">↷</span> 重做</button>
+          <button class="button button-danger-quiet" id="clear-button" type="button">清空</button>
+        </div>
+      </div>
+
+      <div class="control-strip">
+        <fieldset class="level-picker">
+          <legend>画笔强度</legend>
+          <div class="level-options" id="level-options">
+            <button class="level-button is-selected" type="button" data-level="0" aria-pressed="true"><span class="swatch level-0"></span><span>橡皮</span><small>0</small></button>
+            <button class="level-button" type="button" data-level="1" aria-pressed="false"><span class="swatch level-1"></span><span>幼芽</span><small>1</small></button>
+            <button class="level-button" type="button" data-level="2" aria-pressed="false"><span class="swatch level-2"></span><span>新叶</span><small>3</small></button>
+            <button class="level-button" type="button" data-level="3" aria-pressed="false"><span class="swatch level-3"></span><span>繁茂</span><small>6</small></button>
+            <button class="level-button" type="button" data-level="4" aria-pressed="false"><span class="swatch level-4"></span><span>深林</span><small>10</small></button>
+          </div>
+        </fieldset>
+
+        <div class="date-control field-control">
+          <label for="end-date">画布结束日期</label>
+          <input id="end-date" type="date">
+          <small>未来日期会自动锁定</small>
+        </div>
+
+        <div class="view-actions">
+          <div class="view-buttons">
+            <button class="button button-quiet" id="zoom-button" type="button" aria-pressed="false"><span aria-hidden="true">⌕</span> <span id="zoom-label">放大格子</span></button>
+            <button class="button button-quiet pan-button" id="pan-button" type="button" aria-pressed="false"><span aria-hidden="true">↔</span> <span id="pan-label">平移画布</span></button>
+          </div>
+          <span class="shortcut-tip"><kbd>0–4</kbd> 选强度 · <kbd>Space</kbd> 绘制</span>
+          <span class="touch-tip">触屏默认绘制；切换“平移画布”后可左右滑动，缩放按钮仍可使用。</span>
+        </div>
+      </div>
+
+      <div class="canvas-shell" id="canvas-shell">
+        <div class="canvas-scroll" id="canvas-scroll" tabindex="-1">
+          <div class="calendar-stage">
+            <div class="month-labels" id="month-labels" aria-hidden="true"></div>
+            <div class="weekday-labels" aria-hidden="true">
+              <span>一</span><span>三</span><span>五</span>
+            </div>
+            <div class="commit-grid" id="commit-grid" role="grid" aria-label="53 周、每天一格的提交画布" aria-rowcount="7" aria-colcount="53"></div>
+          </div>
+        </div>
+        <p class="grid-help" id="grid-help">拖动或触摸连续绘制。键盘用户可用方向键移动，Home / End、Page Up / Page Down 跳转。</p>
+      </div>
+
+      <div class="summary-bar" aria-label="设计统计">
+        <div><span>计划提交</span><strong id="total-commits">0</strong></div>
+        <div><span>已绘制日期</span><strong id="painted-days">0</strong></div>
+        <div><span>日期范围</span><strong id="date-range">—</strong></div>
+        <div class="summary-status" id="limit-status"><span class="status-light"></span><span>可以继续创作</span></div>
+      </div>
+    </section>
+
+    <section class="tool-grid" aria-label="设计工具">
+      <article class="panel templates-panel">
+        <div class="panel-heading">
+          <div><p class="section-kicker">SEED LIBRARY</p><h2>图案模板</h2></div>
+          <span class="panel-number">02</span>
+        </div>
+        <p>模板会替换当前画布；应用前仍会让你确认。</p>
+        <div class="template-grid">
+          <button class="template-card" type="button" data-template="heart"><span aria-hidden="true">♥</span><strong>爱心</strong><small>HEART</small></button>
+          <button class="template-card" type="button" data-template="hello"><span class="template-word" aria-hidden="true">HI</span><strong>HELLO</strong><small>TYPE</small></button>
+          <button class="template-card" type="button" data-template="wave"><span aria-hidden="true">≋</span><strong>波浪</strong><small>WAVE</small></button>
+          <button class="template-card" type="button" data-template="stars"><span aria-hidden="true">✦</span><strong>星群</strong><small>STARS</small></button>
+        </div>
+      </article>
+
+      <article class="panel data-panel">
+        <div class="panel-heading">
+          <div><p class="section-kicker">FIELD NOTES</p><h2>设计存档</h2></div>
+          <span class="panel-number">03</span>
+        </div>
+        <p>JSON 只包含画布、日期和时区设置，方便继续编辑。不会上传任何内容。</p>
+        <div class="stack-actions">
+          <button class="button button-secondary" id="export-json-button" type="button">导出 JSON <span aria-hidden="true">↓</span></button>
+          <button class="button button-quiet" id="import-json-button" type="button">导入 JSON <span aria-hidden="true">↑</span></button>
+          <input class="visually-hidden" id="import-file" type="file" accept="application/json,.json" tabindex="-1" aria-label="选择要导入的设计 JSON 文件">
+        </div>
+        <p class="microcopy">最大导入文件：1 MiB</p>
+      </article>
+    </section>
+
+    <section class="export-section" aria-labelledby="export-heading">
+      <div class="export-copy">
+        <p class="section-kicker">LOCAL SCRIPT / 04</p>
+        <h2 id="export-heading">从画布到本地提交</h2>
+        <p>脚本只在当前目录创建占位提交，不含网络请求、Token、仓库初始化或 <code>git push</code>。请先创建并克隆一个你拥有的全新独立练习仓库。</p>
+        <ul class="checklist">
+          <li>脚本会在非 Git 仓库或工作区不干净时中止</li>
+          <li>脚本文件放在仓库外，终端当前目录切换到练习仓库</li>
+          <li>邮箱必须已关联到你的 GitHub 账户</li>
+          <li>运行后先检查 <code>git log --format=fuller</code></li>
+        </ul>
+      </div>
+      <form class="export-form" id="export-form">
+        <div class="field-control">
+          <label for="email">提交邮箱</label>
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+          <small>可使用 GitHub 提供的 noreply 邮箱</small>
+        </div>
+        <div class="field-control">
+          <label for="timezone">时间戳时区</label>
+          <select id="timezone" name="timezone" required></select>
+          <small>导出前请核对日期与时区</small>
+        </div>
+        <fieldset class="shell-picker">
+          <legend>脚本格式</legend>
+          <label><input type="radio" name="shell" value="bash" checked><span><strong>Bash</strong><small>macOS · Linux · Git Bash</small></span></label>
+          <label><input type="radio" name="shell" value="powershell"><span><strong>PowerShell</strong><small>Windows PowerShell 5.1+</small></span></label>
+        </fieldset>
+        <button class="button button-primary" id="generate-button" type="submit">生成并审阅脚本 <span aria-hidden="true">→</span></button>
+      </form>
+    </section>
+  </main>
+
+  <footer>
+    <p><strong>Commit Canvas</strong> · 本地优先的开源教育工具</p>
+    <p>MIT License · 无跟踪 · 无账户 · 无网络请求</p>
+  </footer>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form method="dialog" class="dialog-card">
+      <div class="dialog-symbol" aria-hidden="true">?</div>
+      <h2 id="confirm-title">确认操作</h2>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <button class="button button-quiet" value="cancel">取消</button>
+        <button class="button button-danger" id="confirm-action" value="confirm">确认</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="script-dialog" id="script-dialog" aria-labelledby="script-title">
+    <div class="dialog-card script-card">
+      <div class="script-dialog-head">
+        <div><p class="section-kicker">REVIEW BEFORE RUNNING</p><h2 id="script-title">逐行审阅脚本</h2></div>
+        <button class="icon-button" id="close-script-button" type="button" aria-label="关闭脚本预览">×</button>
+      </div>
+      <div class="safety-banner">
+        <strong>只在你拥有的全新独立练习仓库中运行</strong>
+        <p>把脚本留在仓库外，以练习仓库作为终端当前目录；确认邮箱、日期、时区和提交总数。脚本不会初始化仓库、不会推送，也不会联网。</p>
+      </div>
+      <div class="script-meta" id="script-meta"></div>
+      <pre class="script-preview" tabindex="0"><code id="script-output"></code></pre>
+      <label class="review-check"><input id="review-confirm" type="checkbox"> <span>我已阅读脚本，并确认要在自己的独立练习仓库中使用。</span></label>
+      <div class="dialog-actions split-actions">
+        <button class="button button-quiet" id="copy-script-button" type="button">复制脚本</button>
+        <button class="button button-primary" id="download-script-button" type="button" disabled>下载脚本</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

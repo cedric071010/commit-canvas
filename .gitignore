@@ -1,0 +1,31 @@
+# OS and editor metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Local servers, tooling, and reports
+node_modules/
+.cache/
+.parcel-cache/
+dist/
+coverage/
+*.log
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# Generated practice repositories and exported user data
+commit-canvas-lab/
+exports/
+outputs/
+work/
+*.commit-canvas.json
+commit-canvas*.sh
+commit-canvas*.ps1

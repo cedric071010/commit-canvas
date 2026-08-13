@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
-import { contributionCellLabel, projectPlanOntoDates } from "../src/app.js";
+import {
+  contributionCellLabel,
+  contributionGrowthConfirmed,
+  liveConfirmationReady,
+  projectPlanOntoDates,
+} from "../src/app.js";
 
 const [html, javascript, css, readme, gitignore] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
@@ -74,9 +79,8 @@ test("CSS and JavaScript are local, external files", () => {
   }
 });
 
-test("application code contains no network clients or dynamic code execution", () => {
+test("application network access is limited to explicit same-origin companion API routes", () => {
   const forbidden = [
-    [/\bfetch\s*\(/, "fetch"],
     [/\bXMLHttpRequest\b/, "XMLHttpRequest"],
     [/\bWebSocket\b/, "WebSocket"],
     [/\bEventSource\b/, "EventSource"],
@@ -87,8 +91,42 @@ test("application code contains no network clients or dynamic code execution", (
   ];
 
   for (const [pattern, name] of forbidden) {
-    assert.doesNotMatch(javascript, pattern, `${name} is not allowed in this local-only tool`);
+    assert.doesNotMatch(javascript, pattern, `${name} is not allowed in the browser application`);
   }
+
+  const fetchCallCount = [...javascript.matchAll(/\bfetch\s*\(/g)].length;
+  const literalApiCalls = [...javascript.matchAll(/\bfetch\s*\(\s*(["'])\/api\/[a-z0-9/_-]*\1/gi)].length;
+  const encodedJobCalls = [...javascript.matchAll(
+    /\bfetch\s*\(\s*`\/api\/submissions\/\$\{encodeURIComponent\((?:jobId|current\.id)\)\}`/g,
+  )].length;
+  const centralizedApiFetches = [...javascript.matchAll(/\bfetch\s*\(\s*path\s*,/g)].length;
+  assert.ok(fetchCallCount > 0, "live mode should call the localhost companion API");
+  assert.equal(
+    literalApiCalls + encodedJobCalls + centralizedApiFetches,
+    fetchCallCount,
+    "fetch must be a literal same-origin API path, encoded job polling path, or the audited API helper",
+  );
+
+  if (centralizedApiFetches > 0) {
+    assert.equal(centralizedApiFetches, 1, "only one centralized API fetch helper is allowed");
+    assert.match(javascript, /async function apiJson\(path,[\s\S]*?fetch\(path,\s*options\)/);
+    const helperCallCount = [...javascript.matchAll(/\bapiJson\s*\(/g)].length - 1;
+    const helperLiteralCalls = [...javascript.matchAll(/\bapiJson\s*\(\s*(["'])\/api\/[a-z0-9/_-]*\1/gi)].length;
+    const helperPollingCalls = [...javascript.matchAll(
+      /\bapiJson\s*\(\s*`\/api\/submissions\/\$\{encodeURIComponent\((?:jobId|current\.id)\)\}`/g,
+    )].length;
+    assert.equal(
+      helperLiteralCalls + helperPollingCalls,
+      helperCallCount,
+      "every API helper call must use a literal /api/ path or the exact encoded polling template",
+    );
+  }
+
+  assert.doesNotMatch(javascript, /\bhttps?:\/\//i, "browser code must not contain external HTTP endpoints");
+  assert.doesNotMatch(javascript, /\b(?:api\.)?github\.com\b|github\.com\/login/i);
+  assert.doesNotMatch(javascript, /\blocalStorage\b/i, "persistent browser storage is not allowed");
+  assert.doesNotMatch(javascript, /sessionStorage[\s\S]{0,160}(?:token|csrf|authorization|design)/i);
+  assert.match(javascript, /sessionStorage\.setItem\(PENDING_JOB_STORAGE_KEY, jobId\)/);
 });
 
 test("contribution snapshots remain local and visibly separate from design archives", () => {
@@ -106,7 +144,7 @@ test("contribution snapshots remain local and visibly separate from design archi
     assert.match(html, new RegExp(`\\bid=["']${id}["']`), `missing snapshot UI element: ${id}`);
   }
   assert.match(html, /快照不是实时数据/);
-  assert.match(html, /浏览器不会连接 GitHub/);
+  assert.match(html, /离线后备/);
   assert.match(javascript, /parseContributionSnapshot/);
   assert.match(javascript, /byDate:\s*new Map\(\)/);
   assert.match(
@@ -120,6 +158,59 @@ test("contribution snapshots remain local and visibly separate from design archi
   assert.match(css, /has-plan/);
 });
 
+test("live GitHub controls and offline fallbacks remain explicit in the markup", () => {
+  const liveIds = [
+    "live-mode-badge",
+    "connect-status",
+    "refresh-contributions-button",
+    "live-section",
+    "live-heading",
+    "live-account",
+    "live-repository",
+    "managed-repo-name",
+    "managed-repo-visibility",
+    "setup-repository-button",
+    "live-plan-summary",
+    "submit-live-button",
+    "resume-submission-button",
+    "dismiss-submission-button",
+    "live-submit-status",
+    "live-progress",
+    "live-dialog",
+    "live-dialog-title",
+    "live-review-account",
+    "live-review-repository",
+    "live-review-branch",
+    "live-review-count",
+    "live-review-dates",
+    "live-confirm-input",
+    "live-confirm-phrase",
+    "live-high-volume-confirm-wrap",
+    "live-high-volume-confirm",
+    "confirm-live-submit-button",
+  ];
+  const offlineFallbackIds = [
+    "import-snapshot-button",
+    "unload-snapshot-button",
+    "snapshot-file",
+    "export-json-button",
+    "import-json-button",
+    "import-file",
+    "export-form",
+    "generate-button",
+    "script-dialog",
+    "script-output",
+    "copy-script-button",
+    "download-script-button",
+  ];
+
+  for (const id of [...liveIds, ...offlineFallbackIds]) {
+    assert.match(html, new RegExp(`\\bid=["']${id}["']`), `missing dual-mode UI element: ${id}`);
+  }
+  assert.match(html, /真实的远程写入|真实写入远程仓库/);
+  assert.match(html, /高级离线后备/);
+});
+
 test("documented snapshot outputs use the ignored private-data suffix", () => {
   const documentedOutputs = [...readme.matchAll(/--output\s+(\S+)/g)].map((match) => match[1]);
   assert.ok(documentedOutputs.length > 0, "README should document an explicit snapshot output path");
@@ -129,12 +220,14 @@ test("documented snapshot outputs use the ignored private-data suffix", () => {
   assert.match(gitignore, /^\*\.commit-canvas-snapshot\.json$/m);
 });
 
-test("the CSP keeps all network connections disabled", () => {
+test("the CSP permits only same-origin companion connections", () => {
   const cspMeta = tags("meta").find(
     (attributes) => attribute(attributes, "http-equiv")?.toLowerCase() === "content-security-policy",
   );
   assert.ok(cspMeta, "a Content Security Policy is required");
-  assert.match(attribute(cspMeta, "content") ?? "", /connect-src\s+'none'/i);
+  const content = attribute(cspMeta, "content") ?? "";
+  assert.match(content, /(?:^|;)\s*connect-src\s+'self'\s*(?:;|$)/i);
+  assert.doesNotMatch(content, /(?:^|;)\s*connect-src[^;]*(?:\*|https?:|wss?:)/i);
 });
 
 test("plan projection reports dates lost outside the new window and blocked by existing contributions", () => {
@@ -175,6 +268,60 @@ test("cell accessibility text distinguishes an unchecked wall from a checked zer
     contributionCellLabel(true, 7, 0),
     "GitHub 已有 7 次贡献，计划新增 0 次",
   );
+});
+
+test("live submission confirms indexing only when every target date grew by its planned count", () => {
+  const before = new Map([
+    ["2025-01-01", { count: 2 }],
+    ["2025-01-02", { count: 0 }],
+  ]);
+  const planned = new Map([
+    ["2025-01-01", 3],
+    ["2025-01-02", 1],
+  ]);
+  assert.equal(contributionGrowthConfirmed(before, planned, new Map([
+    ["2025-01-01", { count: 5 }],
+    ["2025-01-02", { count: 1 }],
+  ])), true);
+  assert.equal(contributionGrowthConfirmed(before, planned, new Map([
+    ["2025-01-01", { count: 5 }],
+    ["2025-01-02", { count: 0 }],
+  ])), false);
+  assert.match(javascript, /GitHub 贡献墙已确认更新/);
+  assert.match(javascript, /等待 GitHub 索引（最长可能 24 小时）/);
+});
+
+test("live high-volume submission requires a separate acknowledgement at 200 commits", () => {
+  assert.equal(liveConfirmationReady("CREATE", "CREATE", 199, false), true);
+  assert.equal(liveConfirmationReady("CREATE", "CREATE", 200, false), false);
+  assert.equal(liveConfirmationReady("CREATE", "CREATE", 200, true), true);
+  assert.equal(liveConfirmationReady("wrong", "CREATE", 200, true), false);
+});
+
+test("accepted jobs remain resumable while terminal results use backend created and skipped counts", () => {
+  assert.match(javascript, /rememberPendingJob\(payload\.job\.id\)/);
+  assert.match(javascript, /expectedDefaultBranch:\s*plan\.expectedDefaultBranch/);
+  assert.match(javascript, /这不表示任务失败；请继续查询/);
+  assert.match(javascript, /completed\.status === 'failed'/);
+  assert.match(javascript, /创建 \$\{created \?\? 0\} 次，跳过 \$\{skipped \?\? 0\} 次/);
+  assert.match(javascript, /全部计划提交已存在，因此没有创建新提交/);
+  assert.match(javascript, /部分提交被跳过，无法按日期即时确认贡献增长/);
+});
+
+test("an unresolved accepted job blocks new writes and a missing local job remains explicitly unknown", () => {
+  assert.match(javascript, /elements\.submitLive\.disabled[\s\S]{0,160}state\.pendingJobId/);
+  assert.match(javascript, /if \(state\.pendingJobId\)[\s\S]{0,240}才能提交新计划/);
+  assert.match(javascript, /if \(state\.submitting \|\| state\.pendingJobId \|\| !plan\) return/);
+  assert.match(javascript, /error\?\.status === 404/);
+  assert.match(javascript, /这不表示远端失败/);
+  assert.match(javascript, /请先在 GitHub 核对仓库/);
+  assert.match(javascript, /放弃只会清除本浏览器的查询记录，不会取消、撤销或判断远端任务/);
+});
+
+test("reload completion without submission context reports facts without clearing the canvas", () => {
+  assert.match(javascript, /if \(context\) \{[\s\S]*?submittedDates[\s\S]*?restoreLevels\(state\.levels\)[\s\S]*?\}/);
+  assert.match(javascript, /const countDetails = `创建 \$\{created \?\? 0\} 次，跳过 \$\{skipped \?\? 0\} 次`/);
+  assert.match(javascript, /const resultUrl = completed\.result\?\.commitUrl/);
 });
 
 test("markup avoids inline event handlers and unsafe blank-target links", () => {

@@ -210,6 +210,7 @@ export function buildSnapshot(payload, endDate, generatedAt = new Date().toISOSt
   let account;
   const daysByDate = new Map();
   for (const response of payloads) {
+    const responseDaysByDate = new Map();
     const viewer = response?.data?.viewer;
     if (!viewer || typeof viewer !== "object") throw new TypeError("GitHub response is missing viewer data");
     if (typeof viewer.login !== "string" || !ACCOUNT_PATTERN.test(viewer.login)) {
@@ -243,12 +244,15 @@ export function buildSnapshot(payload, endDate, generatedAt = new Date().toISOSt
           throw new TypeError(`GitHub response contribution count and level disagree for ${day.date}`);
         }
         const normalized = { date: day.date, count: day.contributionCount, level };
-        const existing = daysByDate.get(day.date);
-        if (existing && existing.count !== normalized.count) {
+        const existing = responseDaysByDate.get(day.date);
+        if (existing && (existing.count !== normalized.count || existing.level !== normalized.level)) {
           throw new TypeError(`GitHub response contains conflicting duplicate date ${day.date}`);
         }
-        // Later payloads are the authoritative 365-day window. Its relative
-        // quartile level must win over any padded overlap from the supplement.
+        responseDaysByDate.set(day.date, normalized);
+        // Payloads are ordered from broad/older reads to more authoritative
+        // reads. A later overlap therefore replaces both a cached count and
+        // its relative quartile level, while conflicts inside one response
+        // remain invalid above.
         daysByDate.set(day.date, normalized);
       }
     }

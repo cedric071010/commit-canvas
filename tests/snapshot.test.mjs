@@ -135,7 +135,7 @@ test("buildSnapshot maps the fixed fixture to the versioned schema", () => {
   assert.equal(snapshot.days.at(-1).date, "2025-01-01");
 });
 
-test("buildSnapshot lets the authoritative tail replace supplemental levels, not counts", () => {
+test("buildSnapshot lets the authoritative tail replace supplemental levels when counts agree", () => {
   const first = fixtureRange("2023-12-31", "2024-01-05");
   const second = fixtureRange("2024-01-05", "2025-01-04");
   const firstDays = first.data.viewer.contributionsCollection.contributionCalendar.weeks[0].contributionDays;
@@ -148,6 +148,28 @@ test("buildSnapshot lets the authoritative tail replace supplemental levels, not
   assert.equal(snapshot.days.find((day) => day.date === "2024-01-05").level, 4);
   assert.equal(snapshot.days.length, 371);
   assert.equal(snapshot.days.at(-1).date, "2025-01-04");
+});
+
+test("buildSnapshot lets a later fresh payload replace a cached contribution count", () => {
+  const broad = fixture();
+  const fresh = fixtureRange("2024-12-20", "2025-01-01");
+  const date = "2024-12-31";
+  const broadDay = broad.data.viewer.contributionsCollection.contributionCalendar.weeks[0]
+    .contributionDays.find((day) => day.date === date);
+  const freshDay = fresh.data.viewer.contributionsCollection.contributionCalendar.weeks[0]
+    .contributionDays.find((day) => day.date === date);
+  broadDay.contributionCount = 0;
+  broadDay.contributionLevel = "NONE";
+  freshDay.contributionCount = 1;
+  freshDay.contributionLevel = "FIRST_QUARTILE";
+
+  const snapshot = buildSnapshot([broad, fresh], "2025-01-01");
+
+  assert.deepEqual(snapshot.days.find((day) => day.date === date), {
+    date,
+    count: 1,
+    level: 1,
+  });
 });
 
 test("buildSnapshot output satisfies the core contribution snapshot contract", () => {

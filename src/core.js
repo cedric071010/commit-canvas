@@ -437,6 +437,23 @@ function assertSnapshotDoesNotOverlap(design, snapshot) {
   }
 }
 
+export function buildCommitPlan(design, snapshot) {
+  validateDesign(design);
+  if (snapshot !== undefined) assertSnapshotDoesNotOverlap(design, snapshot);
+  const email = validatedEmail(design.email);
+  const exportId = stableExportId(design);
+  const commits = commitPlan(design, exportId);
+  for (const commit of commits) Object.freeze(commit);
+  Object.freeze(commits);
+  return Object.freeze({
+    exportId,
+    confirmationPhrase: confirmationPhrase(commits.length, exportId),
+    email: email ?? null,
+    totalCommits: commits.length,
+    commits,
+  });
+}
+
 function bashScript(commits, phrase, email) {
   const lines = [
     '#!/usr/bin/env bash',
@@ -565,12 +582,8 @@ export function generateScript(format, design, snapshot) {
   if (format !== 'bash' && format !== 'powershell') {
     throw new RangeError("format must be 'bash' or 'powershell'");
   }
-  if (snapshot !== undefined) assertSnapshotDoesNotOverlap(design, snapshot);
-  const email = validatedEmail(design.email);
-  const exportId = stableExportId(design);
-  const commits = commitPlan(design, exportId);
-  const phrase = confirmationPhrase(commits.length, exportId);
+  const plan = buildCommitPlan(design, snapshot);
   return format === 'bash'
-    ? bashScript(commits, phrase, email)
-    : powerShellScript(commits, phrase, email);
+    ? bashScript(plan.commits, plan.confirmationPhrase, plan.email)
+    : powerShellScript(plan.commits, plan.confirmationPhrase, plan.email);
 }

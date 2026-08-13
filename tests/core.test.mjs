@@ -18,6 +18,7 @@ import {
   serializeDesign,
   parseDesign,
   parseContributionSnapshot,
+  buildCommitPlan,
   generateScript,
 } from '../src/core.js';
 
@@ -396,6 +397,151 @@ test('non-overlapping snapshots do not alter scripts, design JSON, or stable exp
   assert.equal(serializeDesign(paintedDesign), serializeDesign({ ...paintedDesign, snapshot }));
 
   assert.throws(() => generateScript('bash', paintedDesign, { ...snapshot, surprise: true }), /unknown/);
+});
+
+test('buildCommitPlan returns a canonical chronological plan with stable markers', () => {
+  const levels = blankLevels();
+  levels[8] = 2;
+  levels[0] = 1;
+  const plan = buildCommitPlan(
+    design({
+      levels,
+      counts: [0, 1, 2, 0, 0],
+      exportId: 'server-plan',
+      email: 'artist@example.com',
+    }),
+  );
+
+  assert.deepEqual(Object.keys(plan), [
+    'exportId',
+    'confirmationPhrase',
+    'email',
+    'totalCommits',
+    'commits',
+  ]);
+  assert.equal(Object.getPrototypeOf(plan), Object.prototype);
+  assert.equal(plan.exportId, 'server-plan');
+  assert.equal(plan.confirmationPhrase, 'CREATE 3 COMMITS FOR server-plan');
+  assert.equal(plan.email, 'artist@example.com');
+  assert.equal(plan.totalCommits, 3);
+  assert.deepEqual(plan.commits, [
+    {
+      timestamp: '2023-12-31T12:00:00+08:00',
+      marker: '[contribution-art:server-plan:2023-12-31:1]',
+      message:
+        'Contribution art 2023-12-31 (1/1) [contribution-art:server-plan:2023-12-31:1]',
+    },
+    {
+      timestamp: '2024-01-08T12:00:00+08:00',
+      marker: '[contribution-art:server-plan:2024-01-08:1]',
+      message:
+        'Contribution art 2024-01-08 (1/2) [contribution-art:server-plan:2024-01-08:1]',
+    },
+    {
+      timestamp: '2024-01-08T12:00:00+08:00',
+      marker: '[contribution-art:server-plan:2024-01-08:2]',
+      message:
+        'Contribution art 2024-01-08 (2/2) [contribution-art:server-plan:2024-01-08:2]',
+    },
+  ]);
+  for (const commit of plan.commits) {
+    assert.equal(Object.getPrototypeOf(commit), Object.prototype);
+    assert.deepEqual(Object.keys(commit), ['timestamp', 'marker', 'message']);
+  }
+});
+
+test('buildCommitPlan derives stable IDs and excludes unavailable future cells', () => {
+  const today = isoDateLocal(new Date());
+  const cells = gridDates(today);
+  const levels = blankLevels();
+  levels[cells.findIndex((cell) => cell.date === today)] = 1;
+  for (const cell of cells) if (cell.isFuture) levels[cell.index] = 1;
+  const input = design({ levels, endDate: today, counts: [0, 1, 0, 0, 0] });
+
+  const first = buildCommitPlan(input);
+  const second = buildCommitPlan(input);
+  assert.deepEqual(first, second);
+  assert.match(first.exportId, /^design-[0-9a-f]{8}$/);
+  assert.equal(first.email, null);
+  assert.equal(first.totalCommits, 1);
+  assert.equal(first.commits.length, 1);
+  assert.match(first.commits[0].marker, new RegExp(`:${today}:1\\]$`));
+});
+
+test('buildCommitPlan strictly rejects incomplete and overlapping snapshots', () => {
+  const endDate = '2025-01-01';
+  const cells = gridDates(endDate, 'Asia/Singapore');
+  const levels = blankLevels();
+  const paintedDate = '2024-01-08';
+  levels[cells.findIndex((cell) => cell.date === paintedDate)] = 1;
+  const input = design({ levels, endDate, counts: [0, 1, 0, 0, 0] });
+
+  const incomplete = contributionSnapshot(endDate);
+  incomplete.days.shift();
+  incomplete.rangeStart = incomplete.days[0].date;
+  assert.throws(() => buildCommitPlan(input, incomplete), /complete contribution grid/i);
+
+  const wrongEnd = contributionSnapshot(endDate);
+  wrongEnd.days.pop();
+  wrongEnd.rangeEnd = wrongEnd.days.at(-1).date;
+  assert.throws(() => buildCommitPlan(input, wrongEnd), /cover.*rangeEnd/i);
+
+  const overlap = contributionSnapshot(endDate);
+  const overlapDay = overlap.days.find((day) => day.date === paintedDate);
+  overlapDay.count = 2;
+  overlapDay.level = 1;
+  assert.throws(() => buildCommitPlan(input, overlap), new RegExp(`overlap.*${paintedDate}`, 'i'));
+  assert.throws(
+    () => buildCommitPlan(input, { ...contributionSnapshot(endDate), surprise: true }),
+    /unknown/,
+  );
+});
+
+test('buildCommitPlan applies design, email, identifier, and commit-limit validation', () => {
+  assert.throws(() => buildCommitPlan(null), /object/);
+  assert.throws(() => buildCommitPlan(design({ exportId: 'bad id; rm' })), /exportId/);
+  assert.throws(
+    () => buildCommitPlan(design({ levels: blankLevels().fill(1), email: 'bad;email@example.com' })),
+    /email/,
+  );
+  assert.throws(() => buildCommitPlan(design()), /at least one/);
+  assert.throws(
+    () => buildCommitPlan(design({ levels: blankLevels().fill(4), counts: [0, 0, 0, 0, 2] })),
+    /500 commit limit/,
+  );
+});
+
+test('buildCommitPlan is deeply immutable and isolated from mutable inputs', () => {
+  const levels = blankLevels();
+  levels[0] = 1;
+  const input = design({
+    levels,
+    counts: [0, 1, 0, 0, 0],
+    exportId: 'immutable-plan',
+    email: 'first@example.com',
+  });
+  const snapshot = contributionSnapshot(input.endDate);
+  const plan = buildCommitPlan(input, snapshot);
+  const canonical = JSON.stringify(plan);
+
+  input.levels[0] = 0;
+  input.counts[1] = 99;
+  input.exportId = 'changed';
+  input.email = 'changed@example.com';
+  snapshot.days[0].count = 4;
+  snapshot.days[0].level = 4;
+  assert.equal(JSON.stringify(plan), canonical);
+
+  assert.ok(Object.isFrozen(plan));
+  assert.ok(Object.isFrozen(plan.commits));
+  assert.ok(plan.commits.every(Object.isFrozen));
+  assert.throws(() => {
+    plan.email = 'changed@example.com';
+  }, TypeError);
+  assert.throws(() => plan.commits.push({}), TypeError);
+  assert.throws(() => {
+    plan.commits[0].message = 'changed';
+  }, TypeError);
 });
 
 test('bash generation emits chronological empty commits and safety gates', () => {

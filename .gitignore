@@ -22,10 +22,13 @@ coverage/
 !.env.example
 
 # Generated practice repositories and exported user data
-commit-canvas-lab/
+commit-canvas-*/
 exports/
 outputs/
 work/
+.commit-canvas-runtime/
+*.commit-canvas-runtime.json
+*.commit-canvas-artifact.json
 *.commit-canvas.json
 *.commit-canvas-snapshot.json
 commit-canvas*.sh

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Commit Canvas 是一个本地运行的 GitHub 贡献图绘画与脚本预览教育工具。">
+  <meta name="description" content="Commit Canvas 是一个本地优先的 GitHub 贡献图绘画工具，可离线设计，或通过 localhost 辅助程序安全提交。">
   <meta name="theme-color" content="#f3f0e6">
   <meta name="color-scheme" content="light dark">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Commit Canvas · 提交画布</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d3226'/%3E%3Cpath d='M18 42c15 1 25-7 29-25-18 3-27 11-29 25Z' fill='%238ccf8b'/%3E%3Cpath d='M17 47c7-12 15-19 27-26' fill='none' stroke='%23f7f2df' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./styles.css">
@@ -18,12 +18,12 @@
       <span class="brand-mark" aria-hidden="true">⌁</span>
       <span>
         <strong>COMMIT CANVAS</strong>
-        <small>提交画布 · 本地教育工具</small>
+        <small>提交画布 · 本地优先教育工具</small>
       </span>
     </a>
     <div class="header-note">
       <span class="privacy-dot" aria-hidden="true"></span>
-      仅在浏览器本地运行 · 不连接 GitHub
+      静态模式离线 · localhost 辅助程序可安全连接 GitHub
     </div>
   </header>
 
@@ -32,7 +32,7 @@
       <div>
         <p class="eyebrow">BOTANICAL GIT NOTEBOOK / 01</p>
         <h1 id="page-title">把想法种进<br><em>贡献日历</em></h1>
-        <p class="lede">在 53 × 7 的格纸上设计图案，导出可逐行检查的本地 Git 脚本。它不会登录账号、索取 Token 或替你推送。</p>
+        <p class="lede">在 53 × 7 的格纸上离线设计图案。静态模式只导入、导出本地文件；由 localhost 辅助程序托管时，可借助已认证的 <code>gh</code> 连接 GitHub，Token 不会交给网页。</p>
       </div>
       <aside class="ethics-note" aria-label="教育用途说明">
         <span class="note-pin" aria-hidden="true"></span>
@@ -107,10 +107,15 @@
       <div class="snapshot-copy">
         <p class="section-kicker">EXISTING CONTRIBUTIONS / 02</p>
         <h2 id="snapshot-heading">当前绿墙快照</h2>
-        <p>导入由本地辅助脚本生成的严格 JSON 快照，把 GitHub 已有贡献作为只读底图。浏览器不会连接 GitHub，也不需要 Token。</p>
+        <p>静态模式可导入严格 JSON 快照作为只读底图；localhost 辅助程序模式可通过已认证的 <code>gh</code> 刷新实时贡献。两种模式都不要求把 GitHub Token 交给网页。</p>
         <p class="snapshot-notice" id="snapshot-notice">尚未导入快照。当前画布无法判断哪些日期已经有贡献。</p>
       </div>
       <div class="snapshot-card">
+        <div class="live-connection-row">
+          <span class="mode-badge" id="live-mode-badge">静态离线模式</span>
+          <p id="connect-status" role="status" aria-live="polite">未连接 localhost 辅助程序；可继续使用手动快照。</p>
+          <button class="button button-secondary" id="refresh-contributions-button" type="button" disabled>刷新实时贡献</button>
+        </div>
         <dl class="snapshot-details">
           <div><dt>账户</dt><dd id="snapshot-account">—</dd></div>
           <div><dt>生成时间</dt><dd id="snapshot-generated-at">—</dd></div>
@@ -121,9 +126,9 @@
           <span><i class="legend-cell legend-existing" aria-hidden="true"></i> GitHub 已有（纹理边框）</span>
           <span><i class="legend-cell legend-planned" aria-hidden="true"></i> 计划新增（内层实心）</span>
         </div>
-        <p class="snapshot-stale-note">快照不是实时数据；GitHub 状态变化后请重新生成并导入。</p>
+        <p class="snapshot-stale-note">手动快照不是实时数据；GitHub 状态变化后请重新生成并导入。它始终作为实时连接不可用时的离线后备。</p>
         <div class="snapshot-actions">
-          <button class="button button-secondary" id="import-snapshot-button" type="button">导入快照 JSON <span aria-hidden="true">↑</span></button>
+          <button class="button button-quiet" id="import-snapshot-button" type="button">手动导入快照 JSON <span aria-hidden="true">↑</span></button>
           <button class="button button-quiet" id="unload-snapshot-button" type="button" disabled>卸载快照</button>
           <input class="visually-hidden" id="snapshot-file" type="file" accept="application/json,.json" tabindex="-1" aria-label="选择要导入的贡献墙快照 JSON 文件">
         </div>
@@ -161,11 +166,57 @@
       </article>
     </section>
 
+    <section class="live-section" id="live-section" aria-labelledby="live-heading">
+      <div class="live-copy">
+        <p class="section-kicker">MANAGED GITHUB SUBMISSION / 05</p>
+        <h2 id="live-heading">通过本地辅助程序提交</h2>
+        <p>仅当页面由 Commit Canvas localhost 辅助程序托管时可用。辅助程序使用本机已认证的 <code>gh</code> 创建或连接一个专用练习仓库；GitHub 凭据不会进入页面。</p>
+        <div class="live-warning">
+          <strong>这是真实的远程写入</strong>
+          <p>提交会写入所选 GitHub 仓库的默认分支。页面内没有撤销远程提交的功能。</p>
+        </div>
+      </div>
+
+      <div class="live-console">
+        <dl class="live-facts" aria-label="实时连接信息">
+          <div><dt>已认证账户</dt><dd id="live-account">尚未连接</dd></div>
+          <div><dt>托管仓库</dt><dd id="live-repository">尚未设置</dd></div>
+        </dl>
+
+        <div class="managed-repo-controls">
+          <div class="field-control">
+            <label for="managed-repo-name">专用仓库名称</label>
+            <input id="managed-repo-name" name="managed-repo-name" type="text" value="commit-canvas-art" autocomplete="off" spellcheck="false" aria-describedby="managed-repo-help">
+            <small id="managed-repo-help">只允许连接或创建由此工具管理的专用练习仓库。</small>
+          </div>
+          <div class="field-control">
+            <label for="managed-repo-visibility">仓库可见性</label>
+            <select id="managed-repo-visibility" name="managed-repo-visibility">
+              <option value="private" selected>私有</option>
+              <option value="public">公开</option>
+            </select>
+            <small>创建后仍可在 GitHub 中更改。</small>
+          </div>
+          <button class="button button-secondary setup-repository-button" id="setup-repository-button" type="button">创建或连接仓库</button>
+        </div>
+
+        <div class="live-plan" aria-labelledby="live-plan-heading">
+          <h3 id="live-plan-heading">提交计划</h3>
+          <p id="live-plan-summary">先连接辅助程序并设置专用仓库；画布计划会在提交前再次显示供你核对。</p>
+        </div>
+        <button class="button button-primary live-submit-button" id="submit-live-button" type="button" disabled>审阅并提交到 GitHub <span aria-hidden="true">→</span></button>
+        <button class="button button-secondary" id="resume-submission-button" type="button" hidden>继续查询已接受的任务</button>
+        <button class="button button-quiet" id="dismiss-submission-button" type="button" hidden>核对 GitHub 后放弃本地记录</button>
+        <p class="live-submit-status" id="live-submit-status" role="status" aria-live="polite">实时提交尚未就绪。</p>
+        <progress id="live-progress" max="100" value="0" aria-label="GitHub 提交进度">0%</progress>
+      </div>
+    </section>
+
     <section class="export-section" aria-labelledby="export-heading">
       <div class="export-copy">
-        <p class="section-kicker">LOCAL SCRIPT / 05</p>
-        <h2 id="export-heading">从画布到本地提交</h2>
-        <p>脚本只在当前目录创建占位提交，不含网络请求、Token、仓库初始化或 <code>git push</code>。请先创建并克隆一个你拥有的全新独立练习仓库。</p>
+        <p class="section-kicker">ADVANCED OFFLINE FALLBACK / 06</p>
+        <h2 id="export-heading">高级离线后备：本地脚本</h2>
+        <p>不使用 localhost 辅助程序时，可导出并逐行审阅脚本。脚本只在当前目录创建占位提交，不含网络请求、Token、仓库初始化或 <code>git push</code>。请先创建并克隆一个你拥有的全新独立练习仓库。</p>
         <ul class="checklist">
           <li>脚本会在非 Git 仓库或工作区不干净时中止</li>
           <li>脚本文件放在仓库外，终端当前目录切换到练习仓库</li>
@@ -196,7 +247,7 @@
 
   <footer>
     <p><strong>Commit Canvas</strong> · 本地优先的开源教育工具</p>
-    <p>MIT License · 无跟踪 · 无账户 · 无网络请求</p>
+    <p>MIT License · 无跟踪 · 静态模式离线 · 实时模式凭据由本机 <code>gh</code> 保管</p>
   </footer>
 
   <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
@@ -207,6 +258,39 @@
       <div class="dialog-actions">
         <button class="button button-quiet" value="cancel">取消</button>
         <button class="button button-danger" id="confirm-action" value="confirm">确认</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="live-dialog" id="live-dialog" aria-labelledby="live-dialog-title" aria-describedby="live-dialog-warning">
+    <form method="dialog" class="dialog-card live-dialog-card">
+      <div class="script-dialog-head">
+        <div><p class="section-kicker">FINAL REMOTE REVIEW</p><h2 id="live-dialog-title">确认写入 GitHub</h2></div>
+        <button class="icon-button" id="close-live-dialog-button" type="submit" value="cancel" aria-label="关闭 GitHub 提交审阅">×</button>
+      </div>
+      <div class="danger-banner" id="live-dialog-warning">
+        <strong>此操作会真实写入远程仓库</strong>
+        <p>以下提交将直接写入 GitHub 仓库的默认分支，且无法在 Commit Canvas 页面内撤销。提交前请逐项核对。</p>
+      </div>
+      <dl class="live-review-list">
+        <div><dt>GitHub 账户</dt><dd id="live-review-account">—</dd></div>
+        <div><dt>远程仓库</dt><dd id="live-review-repository">—</dd></div>
+        <div><dt>目标默认分支</dt><dd id="live-review-branch">—</dd></div>
+        <div><dt>提交总数</dt><dd id="live-review-count">0</dd></div>
+        <div><dt>提交日期</dt><dd id="live-review-dates">—</dd></div>
+      </dl>
+      <div class="field-control live-confirm-control">
+        <label for="live-confirm-input">输入确认短语</label>
+        <input id="live-confirm-input" type="text" autocomplete="off" spellcheck="false" aria-describedby="live-confirm-help">
+        <small id="live-confirm-help">请输入 <strong id="live-confirm-phrase">尚未生成</strong> 以启用最终提交。</small>
+      </div>
+      <label id="live-high-volume-confirm-wrap" hidden>
+        <input id="live-high-volume-confirm" type="checkbox">
+        我了解这是至少 200 次提交的高量操作，并确认继续。
+      </label>
+      <div class="dialog-actions">
+        <button class="button button-quiet" type="submit" value="cancel">返回修改</button>
+        <button class="button button-danger" id="confirm-live-submit-button" type="button" disabled>确认写入默认分支</button>
       </div>
     </form>
   </dialog>

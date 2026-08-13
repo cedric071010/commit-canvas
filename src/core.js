@@ -6,6 +6,10 @@ export const MAX_COMMITS = 500;
 const CELL_COUNT = COLS * ROWS;
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const LEVEL_COUNT = DEFAULT_LEVEL_COUNTS.length;
+const CONTRIBUTION_SNAPSHOT_KIND = 'commit-canvas-contribution-snapshot';
+const GITHUB_ACCOUNT_RE = /^(?!.*--)[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const RFC3339_RE =
+  /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 
 export function isoDateLocal(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
@@ -230,6 +234,110 @@ export function parseDesign(text) {
   return validateDesign(parsed);
 }
 
+function requireExactFields(value, expectedKeys, label) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${label} must be an object`);
+  }
+  const actualKeys = Object.keys(value).sort();
+  const sortedExpectedKeys = [...expectedKeys].sort();
+  if (
+    actualKeys.length !== sortedExpectedKeys.length ||
+    actualKeys.some((key, index) => key !== sortedExpectedKeys[index])
+  ) {
+    throw new RangeError(`${label} has missing or unknown fields`);
+  }
+}
+
+function validateContributionSnapshot(value) {
+  requireExactFields(
+    value,
+    ['kind', 'version', 'account', 'generatedAt', 'rangeStart', 'rangeEnd', 'days'],
+    'contribution snapshot',
+  );
+  if (value.kind !== CONTRIBUTION_SNAPSHOT_KIND) {
+    throw new RangeError('unsupported contribution snapshot kind');
+  }
+  if (value.version !== 1) throw new RangeError('unsupported contribution snapshot version');
+  if (typeof value.account !== 'string' || !GITHUB_ACCOUNT_RE.test(value.account)) {
+    throw new RangeError('contribution snapshot account is not a valid GitHub account name');
+  }
+  if (typeof value.generatedAt !== 'string' || !RFC3339_RE.test(value.generatedAt)) {
+    throw new RangeError('contribution snapshot generatedAt must be an RFC 3339 timestamp');
+  }
+  const generatedDate = RFC3339_RE.exec(value.generatedAt)[1];
+  try {
+    parseDate(generatedDate, 'contribution snapshot generatedAt date');
+  } catch {
+    throw new RangeError('contribution snapshot generatedAt is not a valid timestamp');
+  }
+  if (Number.isNaN(Date.parse(value.generatedAt))) {
+    throw new RangeError('contribution snapshot generatedAt is not a valid timestamp');
+  }
+
+  parseDate(value.rangeStart, 'contribution snapshot rangeStart');
+  parseDate(value.rangeEnd, 'contribution snapshot rangeEnd');
+  if (!Array.isArray(value.days) || value.days.length === 0 || value.days.length > CELL_COUNT) {
+    throw new RangeError(`contribution snapshot days must contain 1 to at most ${CELL_COUNT} entries`);
+  }
+
+  const days = value.days.map((day, index) => {
+    const label = `contribution snapshot days[${index}]`;
+    requireExactFields(day, ['date', 'count', 'level'], label);
+    parseDate(day.date, `${label}.date`);
+    if (!Number.isSafeInteger(day.count) || day.count < 0) {
+      throw new RangeError(`${label}.count must be a non-negative safe integer`);
+    }
+    if (!Number.isInteger(day.level) || day.level < 0 || day.level >= LEVEL_COUNT) {
+      throw new RangeError(`${label}.level must be an integer from 0 to 4`);
+    }
+    if ((day.count === 0) !== (day.level === 0)) {
+      throw new RangeError(`${label}.count and level must both be zero or both be non-zero`);
+    }
+    return { date: day.date, count: day.count, level: day.level };
+  });
+
+  if (days[0].date !== value.rangeStart) {
+    throw new RangeError('contribution snapshot first day must match rangeStart');
+  }
+  if (days.at(-1).date !== value.rangeEnd) {
+    throw new RangeError('contribution snapshot last day must match rangeEnd');
+  }
+  const expectedRangeStart = gridDates(value.rangeEnd, 'UTC')[0].date;
+  if (value.rangeStart !== expectedRangeStart) {
+    throw new RangeError(
+      `contribution snapshot must cover the complete contribution grid from ${expectedRangeStart}`,
+    );
+  }
+  for (let index = 1; index < days.length; index += 1) {
+    const expected = new Date(`${days[index - 1].date}T00:00:00Z`);
+    expected.setUTCDate(expected.getUTCDate() + 1);
+    if (days[index].date !== utcDateString(expected)) {
+      throw new RangeError('contribution snapshot days must be consecutive');
+    }
+  }
+
+  return {
+    kind: CONTRIBUTION_SNAPSHOT_KIND,
+    version: 1,
+    account: value.account,
+    generatedAt: value.generatedAt,
+    rangeStart: value.rangeStart,
+    rangeEnd: value.rangeEnd,
+    days,
+  };
+}
+
+export function parseContributionSnapshot(text) {
+  if (typeof text !== 'string') throw new TypeError('serialized contribution snapshot must be text');
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new SyntaxError('serialized contribution snapshot is not valid JSON');
+  }
+  return validateContributionSnapshot(parsed);
+}
+
 function shellSingleQuote(value) {
   return `'${String(value).replaceAll("'", `'"'"'`)}'`;
 }
@@ -300,6 +408,33 @@ function commitPlan(design, exportId) {
     }
   }
   return commits;
+}
+
+function assertSnapshotDoesNotOverlap(design, snapshot) {
+  const safeDesign = validateDesign(design);
+  const safeSnapshot = validateContributionSnapshot(snapshot);
+  const dates = gridDates(safeDesign.endDate, safeDesign.timeZone);
+  const expectedRangeStart = dates[0].date;
+  if (safeSnapshot.rangeStart !== expectedRangeStart) {
+    throw new RangeError(
+      `contribution snapshot must cover design rangeStart ${expectedRangeStart}`,
+    );
+  }
+  if (safeSnapshot.rangeEnd !== safeDesign.endDate) {
+    throw new RangeError(
+      `contribution snapshot must cover design rangeEnd ${safeDesign.endDate}`,
+    );
+  }
+
+  for (const cell of dates) {
+    if (cell.isFuture || cell.date > safeDesign.endDate) continue;
+    const plannedCount = safeDesign.counts[safeDesign.levels[cell.index]];
+    if (plannedCount > 0 && safeSnapshot.days[cell.index].count > 0) {
+      throw new RangeError(
+        `contribution snapshot overlap: ${cell.date} already has contributions`,
+      );
+    }
+  }
 }
 
 function bashScript(commits, phrase, email) {
@@ -426,10 +561,11 @@ function powerShellScript(commits, phrase, email) {
   return lines.join('\n');
 }
 
-export function generateScript(format, design) {
+export function generateScript(format, design, snapshot) {
   if (format !== 'bash' && format !== 'powershell') {
     throw new RangeError("format must be 'bash' or 'powershell'");
   }
+  if (snapshot !== undefined) assertSnapshotDoesNotOverlap(design, snapshot);
   const email = validatedEmail(design.email);
   const exportId = stableExportId(design);
   const commits = commitPlan(design, exportId);

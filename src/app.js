@@ -8,6 +8,7 @@ const REQUIRED_EXPORTS = [
   'computeSummary',
   'serializeDesign',
   'parseDesign',
+  'parseContributionSnapshot',
   'generateScript',
 ];
 
@@ -39,6 +40,33 @@ const WEEKDAY_NAMES = ['星期日', '星期一', '星期二', '星期三', '星�
 
 let toastTimer;
 
+export function projectPlanOntoDates(plannedByDate, nextDates, blockedByDate = new Map()) {
+  if (!(plannedByDate instanceof Map) || !(blockedByDate instanceof Map) || !Array.isArray(nextDates)) {
+    throw new TypeError('plan projection requires maps and a date array');
+  }
+  const nextDateSet = new Set(nextDates.map((dateInfo) => dateInfo.date));
+  const lostOutsideRange = [...plannedByDate].filter(
+    ([date, level]) => level > 0 && !nextDateSet.has(date),
+  ).length;
+  let clearedExisting = 0;
+  const levels = nextDates.map((dateInfo) => {
+    const plannedLevel = plannedByDate.get(dateInfo.date) ?? 0;
+    if (plannedLevel > 0 && (blockedByDate.get(dateInfo.date)?.count ?? 0) > 0) {
+      clearedExisting += 1;
+      return 0;
+    }
+    return dateInfo.isFuture ? 0 : plannedLevel;
+  });
+  return { levels, lostOutsideRange, clearedExisting };
+}
+
+export function contributionCellLabel(snapshotLoaded, existingCount, plannedCount) {
+  const baseline = snapshotLoaded
+    ? `GitHub 已有 ${existingCount} 次贡献`
+    : '当前 GitHub 贡献未检查';
+  return `${baseline}，计划新增 ${plannedCount} 次`;
+}
+
 function byId(id) {
   const node = document.getElementById(id);
   if (!node) throw new Error(`页面缺少必要元素：${id}`);
@@ -63,6 +91,7 @@ function friendlyError(error) {
     [/at least one non-future commit/i, '画布还没有可导出的提交。'],
     [/valid email address/i, '邮箱格式无效，请检查后重试。'],
     [/not valid JSON/i, '文件不是有效的 JSON。'],
+    [/contribution snapshot|snapshot/i, '贡献墙快照格式无效。'],
     [/unsupported design version/i, '这个存档版本暂不支持。'],
     [/missing or unknown fields/i, '存档字段不完整或包含未知字段。'],
     [/time zone/i, '存档中的时区无效。'],
@@ -109,6 +138,14 @@ async function main() {
     exportJson: byId('export-json-button'),
     importJson: byId('import-json-button'),
     importFile: byId('import-file'),
+    importSnapshot: byId('import-snapshot-button'),
+    unloadSnapshot: byId('unload-snapshot-button'),
+    snapshotFile: byId('snapshot-file'),
+    snapshotAccount: byId('snapshot-account'),
+    snapshotGeneratedAt: byId('snapshot-generated-at'),
+    snapshotRange: byId('snapshot-range'),
+    snapshotExistingStatus: byId('snapshot-existing-status'),
+    snapshotNotice: byId('snapshot-notice'),
     exportForm: byId('export-form'),
     confirmDialog: byId('confirm-dialog'),
     confirmTitle: byId('confirm-title'),
@@ -138,6 +175,8 @@ async function main() {
     pointerStroke: null,
     generatedScript: '',
     generatedFormat: 'bash',
+    snapshot: null,
+    byDate: new Map(),
   };
 
   function toast(message, kind = 'info') {
@@ -199,11 +238,17 @@ async function main() {
     if (!cell || !dateInfo) return;
     const level = state.levels[index];
     const count = state.counts[level];
+    const existing = state.byDate.get(dateInfo.date);
+    const existingCount = existing?.count ?? 0;
     cell.dataset.level = String(level);
+    cell.dataset.existingLevel = String(existing?.level ?? 0);
+    cell.classList.toggle('has-existing', existingCount > 0);
+    cell.classList.toggle('has-plan', level > 0);
     cell.disabled = dateInfo.isFuture;
     cell.dataset.date = dateInfo.date;
-    cell.setAttribute('aria-label', `${dateInfo.date}，${WEEKDAY_NAMES[dateInfo.row]}，强度 ${level}，${count} 次提交${dateInfo.isFuture ? '，未来日期已锁定' : ''}`);
-    cell.title = `${dateInfo.date} · 强度 ${level} · ${count} 次提交`;
+    const contributionLabel = contributionCellLabel(Boolean(state.snapshot), existingCount, count);
+    cell.setAttribute('aria-label', `${dateInfo.date}，${WEEKDAY_NAMES[dateInfo.row]}，${contributionLabel}${existingCount > 0 ? '，已有贡献日期只读' : ''}${dateInfo.isFuture ? '，未来日期已锁定' : ''}`);
+    cell.title = `${dateInfo.date} · ${contributionLabel}${existingCount > 0 ? ' · 已有贡献日期只读' : ''}`;
   }
 
   function renderAllCells() {
@@ -354,7 +399,7 @@ async function main() {
 
   function paint(index, quiet = false) {
     const dateInfo = state.dates[index];
-    if (!dateInfo || dateInfo.isFuture || state.levels[index] === state.selectedLevel) return false;
+    if (!dateInfo || dateInfo.isFuture || (state.byDate.get(dateInfo.date)?.count ?? 0) > 0 || state.levels[index] === state.selectedLevel) return false;
     const summary = safeSummary();
     const projected = totalOf(summary) - state.counts[state.levels[index]] + state.counts[state.selectedLevel];
     if (projected > MAX_COMMITS) {
@@ -445,7 +490,7 @@ async function main() {
       }
     }
     state.dates.forEach((dateInfo) => {
-      if (dateInfo.isFuture) levels[dateInfo.index] = 0;
+      if (dateInfo.isFuture || (state.byDate.get(dateInfo.date)?.count ?? 0) > 0) levels[dateInfo.index] = 0;
     });
     return levels;
   }
@@ -478,6 +523,87 @@ async function main() {
       counts: [...state.counts],
       levels: [...state.levels],
     };
+  }
+
+  function plannedLevelsByDate() {
+    return new Map(state.dates.map((dateInfo) => [dateInfo.date, state.levels[dateInfo.index]]));
+  }
+
+  function renderSnapshotStatus() {
+    const loaded = Boolean(state.snapshot);
+    elements.unloadSnapshot.disabled = !loaded;
+    elements.snapshotNotice.classList.toggle('is-loaded', loaded);
+    if (!loaded) {
+      elements.snapshotAccount.textContent = '—';
+      elements.snapshotGeneratedAt.textContent = '—';
+      elements.snapshotRange.textContent = '—';
+      elements.snapshotExistingStatus.textContent = '未检查';
+      elements.snapshotNotice.textContent = '尚未导入快照。当前画布无法判断哪些日期已经有贡献。';
+      return;
+    }
+    const existingDays = state.snapshot.days.filter((day) => day.count > 0).length;
+    const generatedAt = new Date(state.snapshot.generatedAt);
+    elements.snapshotAccount.textContent = state.snapshot.account;
+    elements.snapshotGeneratedAt.textContent = Number.isNaN(generatedAt.valueOf())
+      ? state.snapshot.generatedAt
+      : generatedAt.toLocaleString('zh-CN');
+    elements.snapshotRange.textContent = `${state.snapshot.rangeStart} — ${state.snapshot.rangeEnd}`;
+    elements.snapshotExistingStatus.textContent = `${existingDays} 天已有贡献`;
+    elements.snapshotNotice.textContent = `已载入 @${state.snapshot.account} 的本地快照；画布结束日期已对齐快照范围。`;
+  }
+
+  function unloadSnapshot(message = '快照已卸载；现有设计未改变。') {
+    state.snapshot = null;
+    state.byDate = new Map();
+    renderSnapshotStatus();
+    renderAllCells();
+    toast(message);
+  }
+
+  async function importContributionSnapshot(file) {
+    if (!file) return;
+    if (file.size > IMPORT_LIMIT_BYTES) {
+      toast('文件超过 1 MiB，已拒绝导入。', 'error');
+      return;
+    }
+    try {
+      const parsed = core.parseContributionSnapshot(await file.text());
+      const nextByDate = new Map(parsed.days.map((day) => [day.date, day]));
+      const plannedByDate = plannedLevelsByDate();
+      const nextDates = core.gridDates(parsed.rangeEnd, elements.timezone.value);
+      const projection = projectPlanOntoDates(plannedByDate, nextDates, nextByDate);
+      if (projection.clearedExisting > 0 || projection.lostOutsideRange > 0) {
+        const effects = [
+          projection.clearedExisting > 0 ? `清除 ${projection.clearedExisting} 个与已有贡献重叠的计划日期` : '',
+          projection.lostOutsideRange > 0 ? `丢失 ${projection.lostOutsideRange} 个移出新 53 周范围的计划日期` : '',
+        ].filter(Boolean).join('，并');
+        const accepted = await confirmAction({
+          title: '导入快照并调整当前计划？',
+          message: `把结束日期对齐到 ${parsed.rangeEnd} 会${effects}。取消将保留当前快照、日期和全部计划。`,
+          confirmLabel: '导入并调整',
+        });
+        if (!accepted) return;
+      }
+      elements.endDate.value = parsed.rangeEnd;
+      state.snapshot = parsed;
+      state.byDate = nextByDate;
+      state.dates = nextDates;
+      state.levels = projection.levels;
+      state.undo.length = 0;
+      state.redo.length = 0;
+      renderDates();
+      renderSnapshotStatus();
+      updateHistoryButtons();
+      const changes = [
+        projection.clearedExisting > 0 ? `清除 ${projection.clearedExisting} 个重叠日期` : '',
+        projection.lostOutsideRange > 0 ? `移除 ${projection.lostOutsideRange} 个范围外日期` : '',
+      ].filter(Boolean).join('，');
+      toast(`已导入 @${parsed.account} 的贡献墙快照${changes ? `，并${changes}` : ''}。`);
+    } catch (error) {
+      toast(`快照导入失败：${friendlyError(error)}`, 'error');
+    } finally {
+      elements.snapshotFile.value = '';
+    }
   }
 
   function downloadText(contents, filename, type) {
@@ -517,19 +643,37 @@ async function main() {
         throw new Error(`存档超过 ${MAX_COMMITS} 次提交的安全上限。`);
       }
       const hasContent = paintedOf(safeSummary()) > 0;
-      if (hasContent) {
+      const unloadForDateChange = Boolean(state.snapshot && parsed.endDate !== state.snapshot.rangeEnd);
+      const parsedDates = core.gridDates(parsed.endDate, parsed.timeZone);
+      const snapshotConflicts = state.snapshot
+        ? parsedDates.filter((dateInfo) => parsed.levels[dateInfo.index] > 0 && (state.byDate.get(dateInfo.date)?.count ?? 0) > 0)
+        : [];
+      if (hasContent || unloadForDateChange || snapshotConflicts.length > 0) {
+        const snapshotEffect = unloadForDateChange
+          ? '结束日期不同，因此当前绿墙快照也会卸载。'
+          : snapshotConflicts.length > 0
+            ? `其中 ${snapshotConflicts.length} 个计划日期已有 GitHub 贡献，将从计划中清除。`
+            : '';
         const accepted = await confirmAction({
           title: '导入并替换当前画布？',
-          message: '导入会替换当前图案、结束日期和时区。此操作会作为一步记录，可用“撤销”恢复图案。',
+          message: `导入会替换当前图案、结束日期和时区。${snapshotEffect}`,
           confirmLabel: '确认导入',
         });
         if (!accepted) return;
       }
       const before = snapshot();
+      if (unloadForDateChange) {
+        state.snapshot = null;
+        state.byDate = new Map();
+        renderSnapshotStatus();
+      }
       elements.endDate.value = parsed.endDate;
       ensureTimeZoneOption(parsed.timeZone);
       elements.timezone.value = parsed.timeZone;
       state.levels = [...parsed.levels];
+      for (const dateInfo of parsedDates) {
+        if ((state.byDate.get(dateInfo.date)?.count ?? 0) > 0) state.levels[dateInfo.index] = 0;
+      }
       state.counts = [...DEFAULT_LEVEL_COUNTS];
       renderDates();
       pushUndo(before);
@@ -605,14 +749,28 @@ async function main() {
       });
       if (!accepted) return;
     }
+    if (!state.snapshot) {
+      const accepted = await confirmAction({
+        title: '未检查当前贡献墙',
+        message: '尚未导入当前绿墙快照，脚本可能在已有贡献的日期继续创建提交。仍要生成脚本供审阅吗？',
+        confirmLabel: '仍然生成',
+        danger: false,
+      });
+      if (!accepted) return;
+    }
 
     try {
       const format = new FormData(elements.exportForm).get('shell');
       const design = { ...currentDesign(), email: elements.email.value.trim() };
-      state.generatedScript = core.generateScript(format, design);
+      state.generatedScript = state.snapshot
+        ? core.generateScript(format, design, state.snapshot)
+        : core.generateScript(format, design);
       state.generatedFormat = format;
       elements.scriptOutput.textContent = state.generatedScript;
-      elements.scriptMeta.textContent = `${format === 'bash' ? 'Bash (.sh)' : 'PowerShell (.ps1)'} · ${total} 次提交 · ${elements.endDate.value} · ${elements.timezone.value}`;
+      const snapshotMeta = state.snapshot
+        ? ` · 快照 @${state.snapshot.account} · ${state.snapshot.generatedAt} · 避开 ${state.snapshot.days.filter((day) => day.count > 0).length} 个已有绿点`
+        : ' · 未检查当前绿墙';
+      elements.scriptMeta.textContent = `${format === 'bash' ? 'Bash (.sh)' : 'PowerShell (.ps1)'} · ${total} 次提交 · ${elements.endDate.value} · ${elements.timezone.value}${snapshotMeta}`;
       elements.reviewConfirm.checked = false;
       elements.copyScript.disabled = true;
       elements.downloadScript.disabled = true;
@@ -739,7 +897,46 @@ async function main() {
         toast(friendlyError(error), 'error');
       }
     };
-    elements.endDate.addEventListener('change', updateCalendarControl);
+    elements.endDate.addEventListener('change', async () => {
+      if (state.snapshot && elements.endDate.value !== state.snapshot.rangeEnd) {
+        const requestedEndDate = elements.endDate.value;
+        let nextDates;
+        let projection;
+        try {
+          nextDates = core.gridDates(requestedEndDate, elements.timezone.value);
+          projection = projectPlanOntoDates(plannedLevelsByDate(), nextDates);
+        } catch (error) {
+          elements.endDate.value = state.renderedEndDate;
+          toast(friendlyError(error), 'error');
+          return;
+        }
+        const lossWarning = projection.lostOutsideRange > 0
+          ? `，并永久移除 ${projection.lostOutsideRange} 个离开新 53 周范围的计划日期`
+          : '；当前计划日期都会保留';
+        const accepted = await confirmAction({
+          title: '卸载当前绿墙快照？',
+          message: `快照只对应它记录的日期范围。更改画布结束日期会卸载快照${lossWarning}。取消将恢复原结束日期，快照和计划均不变。`,
+          confirmLabel: '卸载并更改',
+        });
+        if (!accepted) {
+          elements.endDate.value = state.renderedEndDate;
+          return;
+        }
+        state.snapshot = null;
+        state.byDate = new Map();
+        elements.endDate.value = requestedEndDate;
+        state.dates = nextDates;
+        state.levels = projection.levels;
+        renderSnapshotStatus();
+        renderDates();
+        state.undo.length = 0;
+        state.redo.length = 0;
+        updateHistoryButtons();
+        toast(`结束日期已更改，当前绿墙快照已卸载${projection.lostOutsideRange > 0 ? `，已移除 ${projection.lostOutsideRange} 个范围外计划日期` : ''}。`);
+        return;
+      }
+      updateCalendarControl();
+    });
     elements.timezone.addEventListener('change', updateCalendarControl);
 
     elements.zoom.addEventListener('click', () => {
@@ -760,6 +957,9 @@ async function main() {
     elements.exportJson.addEventListener('click', exportJson);
     elements.importJson.addEventListener('click', () => elements.importFile.click());
     elements.importFile.addEventListener('change', () => importJson(elements.importFile.files?.[0]));
+    elements.importSnapshot.addEventListener('click', () => elements.snapshotFile.click());
+    elements.snapshotFile.addEventListener('change', () => importContributionSnapshot(elements.snapshotFile.files?.[0]));
+    elements.unloadSnapshot.addEventListener('click', () => unloadSnapshot());
     elements.exportForm.addEventListener('submit', generate);
 
     elements.closeScript.addEventListener('click', () => elements.scriptDialog.close());
@@ -790,8 +990,9 @@ async function main() {
   elements.endDate.value = core.isoDateLocal(new Date());
   makeCells();
   renderDates();
+  renderSnapshotStatus();
   updateHistoryButtons();
   bindEvents();
 }
 
-main().catch(showFatal);
+if (typeof document !== 'undefined') main().catch(showFatal);

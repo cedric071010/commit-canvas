@@ -7,7 +7,8 @@
   "license": "MIT",
   "scripts": {
     "serve": "node scripts/serve.mjs",
+    "snapshot": "node scripts/github-snapshot.mjs",
     "test": "node --test",
-    "check": "node --check scripts/serve.mjs && node --test"
+    "check": "node --check scripts/serve.mjs && node --check scripts/github-snapshot.mjs && node --test"
   }
 }

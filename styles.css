@@ -27,7 +27,6 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  min-width: 320px;
   color: var(--ink);
   background:
     linear-gradient(rgb(32 49 41 / 3%) 1px, transparent 1px),
@@ -127,12 +126,34 @@ h1 em { color: var(--forest); font-weight: 500; }
 .ethics-note p { margin: 8px 0 5px; color: #625b46; font-size: .87rem; }
 .note-pin { position: absolute; top: -8px; left: 50%; width: 15px; height: 15px; background: var(--rust); border-radius: 50%; box-shadow: 1px 2px 2px rgb(0 0 0 / 20%); }
 
-.workspace, .panel, .export-section {
+.workspace, .snapshot-panel, .panel, .export-section {
   background: rgb(251 250 243 / 94%);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
 }
 .workspace { margin: 0 32px; padding: clamp(20px, 4vw, 44px); }
+.snapshot-panel {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(360px, 1.1fr);
+  gap: clamp(24px, 5vw, 64px);
+  margin: 22px 32px 0;
+  padding: clamp(24px, 4vw, 40px);
+}
+.snapshot-copy > p { color: var(--muted); }
+.snapshot-notice { padding: 10px 13px; border-left: 3px solid var(--rust); background: var(--paper); font-size: .8rem; }
+.snapshot-notice.is-loaded { border-left-color: var(--forest); }
+.snapshot-card { padding: 18px; border: 1px dashed var(--line); background: var(--paper); }
+.snapshot-details { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; margin: 0; }
+.snapshot-details div { min-width: 0; }
+.snapshot-details dt { color: var(--muted); font-size: .67rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.snapshot-details dd { margin: 2px 0 0; font-size: .82rem; font-weight: 700; overflow-wrap: anywhere; }
+.snapshot-legend { display: flex; flex-wrap: wrap; gap: 12px 18px; margin: 18px 0 8px; color: var(--muted); font-size: .72rem; }
+.snapshot-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend-cell { display: inline-block; width: 15px; height: 15px; border-radius: 2px; }
+.legend-existing { border: 2px dashed var(--forest); background: repeating-linear-gradient(135deg, transparent 0 3px, rgb(31 74 53 / 24%) 3px 5px); }
+.legend-planned { border: 2px solid var(--level-4); background: var(--level-2); box-shadow: inset 0 0 0 2px var(--sheet); }
+.snapshot-stale-note { margin: 8px 0 14px; color: var(--muted); font-size: .72rem; }
+.snapshot-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .workspace-topline, .panel-heading, .script-dialog-head {
   display: flex;
   align-items: flex-start;
@@ -274,6 +295,18 @@ legend, .field-control label { margin-bottom: 8px; color: var(--muted); font-siz
 }
 .grid-cell:hover:not(:disabled) { box-shadow: 0 0 0 2px var(--ink); z-index: 1; }
 .grid-cell:focus-visible { outline: 2px solid var(--rust); z-index: 2; }
+.grid-cell.has-existing {
+  border: 2px dashed var(--forest-dark);
+  background-image: repeating-linear-gradient(135deg, transparent 0 2px, rgb(255 255 255 / 38%) 2px 4px);
+  cursor: help;
+}
+.grid-cell.has-existing[data-existing-level="1"] { background-color: var(--level-1); }
+.grid-cell.has-existing[data-existing-level="2"] { background-color: var(--level-2); }
+.grid-cell.has-existing[data-existing-level="3"] { background-color: var(--level-3); }
+.grid-cell.has-existing[data-existing-level="4"] { background-color: var(--level-4); }
+.grid-cell.has-existing.has-plan { box-shadow: inset 0 0 0 2px var(--sheet); }
+.grid-cell.has-plan::after { content: ""; position: absolute; inset: 3px; border: 1px solid rgb(23 54 39 / 58%); border-radius: 1px; pointer-events: none; }
+.grid-cell.has-existing:hover:not(:disabled) { box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 2px var(--sheet); }
 .grid-cell:disabled { cursor: not-allowed; opacity: .28; background: repeating-linear-gradient(135deg, #deddd5 0 2px, #eeeeea 2px 4px); }
 .canvas-shell.is-zoomed { --cell: 19px; --gap: 5px; }
 .grid-help { margin: 10px 0 0 28px; color: var(--muted); font-size: .72rem; }
@@ -361,6 +394,7 @@ dialog::backdrop { background: rgb(19 34 26 / 72%); backdrop-filter: blur(3px); 
   .level-picker { grid-column: 1 / -1; }
   .tool-grid { grid-template-columns: 1fr; }
   .export-section { grid-template-columns: 1fr; }
+  .snapshot-panel { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
@@ -368,7 +402,7 @@ dialog::backdrop { background: rgb(19 34 26 / 72%); backdrop-filter: blur(3px); 
   .header-note { display: none; }
   .intro { grid-template-columns: 1fr; gap: 35px; padding-top: 52px; }
   .ethics-note { max-width: 430px; }
-  .workspace, .export-section { margin-left: 10px; margin-right: 10px; }
+  .workspace, .snapshot-panel, .export-section { margin-left: 10px; margin-right: 10px; }
   .tool-grid { padding-left: 10px; padding-right: 10px; }
   .workspace-topline { flex-direction: column; }
   .history-actions { justify-content: flex-start; }
@@ -398,11 +432,14 @@ dialog::backdrop { background: rgb(19 34 26 / 72%); backdrop-filter: blur(3px); 
   .summary-bar > div:nth-child(3) { border-bottom: 1px solid var(--line); }
   .shell-picker { grid-template-columns: 1fr; }
   .dialog-card { padding: 22px; }
+  .snapshot-details { grid-template-columns: 1fr; }
+  .snapshot-actions .button { width: 100%; }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
+    --rust: #e58b73;
     --paper: #18231d;
     --paper-deep: #24332a;
     --sheet: #202e27;
@@ -417,15 +454,17 @@ dialog::backdrop { background: rgb(19 34 26 / 72%); backdrop-filter: blur(3px); 
     --level-3: #3b9d5b;
     --level-4: #31bd62;
   }
-  .workspace, .panel, .export-section { background: rgb(32 46 39 / 96%); }
+  .workspace, .snapshot-panel, .panel, .export-section { background: rgb(32 46 39 / 96%); }
   .control-strip { background: rgb(13 26 19 / 35%); }
   .canvas-shell { background: #1a2821; }
   .ethics-note { color: #2a291f; background: #d3bf82; }
   .field-control input, .field-control select, .level-button, .button { color: var(--ink); }
   .button-primary { color: #102219; background: #8fc992; border-color: #8fc992; }
   .button-primary:hover:not(:disabled) { color: #102219; background: #a4d7a6; }
-  .button-secondary, .button-danger { color: white; }
+  .button-secondary { color: white; }
+  .button-danger, .dialog-symbol { color: #102219; }
   .grid-cell:disabled { background: repeating-linear-gradient(135deg, #39453e 0 2px, #2d3832 2px 4px); }
+  .grid-cell.has-existing { border-color: #a7d3a6; background-image: repeating-linear-gradient(135deg, transparent 0 2px, rgb(255 255 255 / 22%) 2px 4px); }
   .template-card > span:first-child { color: #658267; }
   .export-form { background: var(--sheet); }
   .dialog-card { background: var(--sheet); }
@@ -438,6 +477,8 @@ dialog::backdrop { background: rgb(19 34 26 / 72%); backdrop-filter: blur(3px); 
   .grid-cell[data-level="2"] { border-style: dashed; }
   .grid-cell[data-level="3"] { border-width: 2px; }
   .grid-cell[data-level="4"] { background: Highlight; }
+  .grid-cell.has-existing { border: 2px dashed LinkText; }
+  .grid-cell.has-plan::after { border: 2px solid Highlight; }
   .level-button.is-selected,
   .shell-picker input:checked + span {
     color: HighlightText;
@@ -450,6 +491,8 @@ dialog::backdrop { background: rgb(19 34 26 / 72%); backdrop-filter: blur(3px); 
 
 @media (pointer: coarse) {
   .pan-button, .touch-tip { display: inline-flex; }
+  .canvas-shell { --cell: 24px; --gap: 4px; }
+  .canvas-shell.is-zoomed { --cell: 32px; --gap: 5px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

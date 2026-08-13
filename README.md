@@ -10,8 +10,9 @@
 - 鼠标点击/拖动、触摸绘制与键盘操作
 - 撤销、重做和内置图案模板
 - JSON 导入/导出，便于保存和继续编辑设计
+- 可选的本地贡献快照：把当前账号已有绿点显示在画布上并锁定，避免在同一天重复绘制
 - 导出 Bash 与 PowerShell 脚本，执行前可以逐行审阅
-- 纯客户端静态页面：不上传设计，不索取 GitHub Token，不访问 GitHub API，也不会替你 `push`
+- 浏览器页面仍是纯客户端静态页面：不上传设计、不索取或接收 GitHub Token、不访问 GitHub API，也不会替你 `push`
 
 画布中的 5 个等级表示同一天计划生成的不同提交数量。GitHub 的实际颜色会随主题、当年数据分布和站点实现动态变化，因此预览色只作近似参考。
 
@@ -19,7 +20,7 @@
 
 ## 新手流程
 
-1. 打开 Commit Canvas，在画布上选择强度并绘制图案；用撤销、重做或模板快速调整。
+1. 打开 Commit Canvas，在画布上选择强度并绘制图案；用撤销、重做或模板快速调整。如果不希望覆盖账号已有绿点，可先按下一节生成并导入当前贡献快照。
 2. 先导出 JSON 作为设计备份，再选择画布结束日期、提交邮箱和目标 shell，导出脚本。
 3. 在 GitHub 新建一个**你拥有的、非 fork 的独立练习仓库**，例如 `commit-canvas-lab`。不要在工作仓库或别人的仓库里实验。
 4. 把仓库克隆到本机，打开导出的脚本并确认日期、邮箱、提交数量和目标目录。确认 Git 已配置 `user.name`；若导出时没有填写邮箱，还要配置 `user.email`。脚本只负责本地提交，不包含网络请求、Token 或 `git push`。
@@ -28,16 +29,44 @@
 
 不同 shell 的执行策略可能限制脚本运行。不要为了运行陌生脚本永久降低系统安全设置；优先阅读脚本，并只对这一次、本地可信文件使用临时许可。
 
+## 读取当前贡献墙（可选）
+
+浏览器页面为了隐私与可审计性而保持完全离线于 GitHub。若想在绘画前看到当前账号已有的贡献，可使用随项目提供的本地快照工具。它通过你本机**已经登录的 GitHub CLI (`gh`)** 调用 GitHub GraphQL API，读取当前账号逐日贡献并生成一个**不包含 Token、cookie 或其他凭据**的 JSON 文件；网页本身仍不会登录 GitHub、接收 Token 或发起该请求。
+
+先安装并登录 `gh`，再让命令的 `--end-date` 与页面里的“画布结束日期”保持相同。例如页面结束日期为 `2026-08-13` 时：
+
+Windows PowerShell 或命令提示符：
+
+```powershell
+gh auth status
+npm.cmd run snapshot -- --end-date 2026-08-13 --output .\contribution-snapshot.commit-canvas-snapshot.json
+```
+
+macOS 或 Linux：
+
+```bash
+gh auth status
+npm run snapshot -- --end-date 2026-08-13 --output ./contribution-snapshot.commit-canvas-snapshot.json
+```
+
+`--output` 可省略；默认文件名会包含账号和日期，并以 `.commit-canvas-snapshot.json` 结尾。若目标文件已存在，请选择新路径，或在确认覆盖内容后追加 `--force`。把生成的快照导入页面后，已有贡献的日期会显示为背景绿点并锁定，空白日期仍可绘制，从而避免在已有绿点上重复安排占位提交。
+
+快照只是生成那一刻的数据，不会实时更新；页面会显示其生成时间。若你在其他仓库产生了新贡献、跨越了日期边界，或准备导出最终脚本，请重新运行快照命令并再次导入。普通的“设计 JSON”只保存你的绘画设计，**不会包含当前贡献快照**。
+
+快照虽然不含凭据，仍可能包含 GitHub 账号名、逐日活动数量或等级等个人活动统计。请只在本机保管，不要提交到 Git 仓库、附在公开 issue/PR 中或分享给无关人员。
+
+GitHub 贡献图颜色是相对于该账号所选时间范围内的活动分布计算的等级，不是固定次数到固定色号的映射。快照颜色和 Commit Canvas 的五档预览都只能帮助规划，不能保证 GitHub 最终显示完全相同的深浅。
+
 ## GitHub 贡献计入条件
 
-脚本能够设置 Git 元数据，但不能保证 GitHub 一定显示对应方格。按照 GitHub 官方文档，至少检查：
+导出的脚本只会在本地创建 commit，本身不会改变线上贡献墙。只有你之后主动把这些 commit `git push` 到 GitHub，并且它们满足 GitHub 的官方计入规则，贡献墙才可能发生变化。按照 GitHub 官方文档，至少检查：
 
 - commit 的作者邮箱必须已关联到你的 GitHub 账户，或使用 GitHub 在邮箱设置中提供给你的 `noreply` 地址；
 - commit 必须位于独立仓库，而不是 fork；
 - commit 必须最终出现在仓库的默认分支，或项目站点使用的 `gh-pages` 分支；
 - 此外还需满足 GitHub 列出的仓库关系条件之一，例如你是该仓库协作者，或是仓库所属组织的成员；自有练习仓库通常是最清晰的选择；
 - 贡献日历按 commit 的 **author date** 归类，并使用该时间戳中的时区信息；导出前请核对日期、时间和时区；
-- 满足条件后仍可能最多等待 24 小时才显示。
+- 满足条件并推送后仍可能最多等待 24 小时才显示。
 - 如果练习仓库是私有仓库，还需在 GitHub 个人资料的贡献设置中启用私有贡献显示；公开资料只显示私有贡献数量，不显示仓库或组织详情。
 
 规则可能变化，请以官方说明为准：
@@ -92,7 +121,7 @@ Commit Canvas 是独立社区项目，与 GitHub, Inc. 无隶属、认可或赞�
 
 ## English summary
 
-Commit Canvas is an independent, client-only, 53 × 7 contribution-graph drawing tool for education and is not affiliated with or endorsed by GitHub. It offers five intensity levels, pointer/touch/keyboard drawing, undo/redo, templates, JSON import/export, and reviewable Bash/PowerShell exports. It never requests a token, calls GitHub, or pushes for you. Use only a standalone practice repository you own, start with small patterns, review the generated script, and remember that decorative commits are not evidence of work. See the Chinese sections above and GitHub's official documentation for eligibility, acceptable use, safety, and recovery details.
+Commit Canvas is an independent, client-only, 53 × 7 contribution-graph drawing tool for education and is not affiliated with or endorsed by GitHub. It offers five intensity levels, pointer/touch/keyboard drawing, undo/redo, templates, JSON import/export, and reviewable Bash/PowerShell exports. The browser never requests or receives a token, calls GitHub, or pushes for you. An optional local `npm run snapshot` command uses an already authenticated `gh` session to export a credential-free snapshot of daily contributions; imported existing contributions are displayed and locked. Snapshots are not live and may contain private activity statistics, so refresh before exporting a script and never commit them. Use only a standalone practice repository you own, start with small patterns, review the generated script, and remember that only pushed, eligible commits can affect the graph and decorative commits are not evidence of work. See the Chinese sections above and GitHub's official documentation for eligibility, acceptable use, safety, and recovery details.
 
 ## 参与贡献与许可
 

@@ -103,11 +103,39 @@
       </div>
     </section>
 
+    <section class="snapshot-panel" aria-labelledby="snapshot-heading">
+      <div class="snapshot-copy">
+        <p class="section-kicker">EXISTING CONTRIBUTIONS / 02</p>
+        <h2 id="snapshot-heading">当前绿墙快照</h2>
+        <p>导入由本地辅助脚本生成的严格 JSON 快照，把 GitHub 已有贡献作为只读底图。浏览器不会连接 GitHub，也不需要 Token。</p>
+        <p class="snapshot-notice" id="snapshot-notice">尚未导入快照。当前画布无法判断哪些日期已经有贡献。</p>
+      </div>
+      <div class="snapshot-card">
+        <dl class="snapshot-details">
+          <div><dt>账户</dt><dd id="snapshot-account">—</dd></div>
+          <div><dt>生成时间</dt><dd id="snapshot-generated-at">—</dd></div>
+          <div><dt>覆盖范围</dt><dd id="snapshot-range">—</dd></div>
+          <div><dt>已有绿点</dt><dd id="snapshot-existing-status">未检查</dd></div>
+        </dl>
+        <div class="snapshot-legend" aria-label="画布图例">
+          <span><i class="legend-cell legend-existing" aria-hidden="true"></i> GitHub 已有（纹理边框）</span>
+          <span><i class="legend-cell legend-planned" aria-hidden="true"></i> 计划新增（内层实心）</span>
+        </div>
+        <p class="snapshot-stale-note">快照不是实时数据；GitHub 状态变化后请重新生成并导入。</p>
+        <div class="snapshot-actions">
+          <button class="button button-secondary" id="import-snapshot-button" type="button">导入快照 JSON <span aria-hidden="true">↑</span></button>
+          <button class="button button-quiet" id="unload-snapshot-button" type="button" disabled>卸载快照</button>
+          <input class="visually-hidden" id="snapshot-file" type="file" accept="application/json,.json" tabindex="-1" aria-label="选择要导入的贡献墙快照 JSON 文件">
+        </div>
+        <p class="microcopy">最大导入文件：1 MiB · 快照不会写入设计 JSON</p>
+      </div>
+    </section>
+
     <section class="tool-grid" aria-label="设计工具">
       <article class="panel templates-panel">
         <div class="panel-heading">
           <div><p class="section-kicker">SEED LIBRARY</p><h2>图案模板</h2></div>
-          <span class="panel-number">02</span>
+          <span class="panel-number">03</span>
         </div>
         <p>模板会替换当前画布；应用前仍会让你确认。</p>
         <div class="template-grid">
@@ -121,7 +149,7 @@
       <article class="panel data-panel">
         <div class="panel-heading">
           <div><p class="section-kicker">FIELD NOTES</p><h2>设计存档</h2></div>
-          <span class="panel-number">03</span>
+          <span class="panel-number">04</span>
         </div>
         <p>JSON 只包含画布、日期和时区设置，方便继续编辑。不会上传任何内容。</p>
         <div class="stack-actions">
@@ -135,7 +163,7 @@
 
     <section class="export-section" aria-labelledby="export-heading">
       <div class="export-copy">
-        <p class="section-kicker">LOCAL SCRIPT / 04</p>
+        <p class="section-kicker">LOCAL SCRIPT / 05</p>
         <h2 id="export-heading">从画布到本地提交</h2>
         <p>脚本只在当前目录创建占位提交，不含网络请求、Token、仓库初始化或 <code>git push</code>。请先创建并克隆一个你拥有的全新独立练习仓库。</p>
         <ul class="checklist">

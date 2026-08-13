@@ -17,6 +17,7 @@ import {
   computeSummary,
   serializeDesign,
   parseDesign,
+  parseContributionSnapshot,
   generateScript,
 } from '../src/core.js';
 
@@ -28,6 +29,26 @@ const design = (overrides = {}) => ({
   counts: [...DEFAULT_LEVEL_COUNTS],
   ...overrides,
 });
+
+function contributionSnapshot(endDate = '2025-01-01', overrides = {}) {
+  const rangeStart = gridDates(endDate, 'Asia/Singapore')[0].date;
+  const days = [];
+  const cursor = new Date(`${rangeStart}T00:00:00Z`);
+  while (cursor.toISOString().slice(0, 10) <= endDate) {
+    days.push({ date: cursor.toISOString().slice(0, 10), count: 0, level: 0 });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return {
+    kind: 'commit-canvas-contribution-snapshot',
+    version: 1,
+    account: 'octocat',
+    generatedAt: '2025-01-02T03:04:05.678Z',
+    rangeStart,
+    rangeEnd: endDate,
+    days,
+    ...overrides,
+  };
+}
 
 function availableShell(candidates) {
   return candidates.find((candidate) => {
@@ -225,6 +246,156 @@ test('design parsing strictly rejects malformed, unknown, and unsafe data', () =
     () => parseDesign(JSON.stringify({ version: 1, ...design(), endDate: '2025-02-29' })),
     /valid calendar/,
   );
+});
+
+test('contribution snapshot parsing returns strict, canonical snapshot data', () => {
+  const snapshot = contributionSnapshot();
+  const parsed = parseContributionSnapshot(JSON.stringify(snapshot));
+
+  assert.deepEqual(parsed, snapshot);
+  assert.notEqual(parsed, snapshot);
+  assert.notEqual(parsed.days, snapshot.days);
+  assert.equal(parsed.days.length, 368);
+  assert.equal(parsed.days[0].date, parsed.rangeStart);
+  assert.equal(parsed.days.at(-1).date, parsed.rangeEnd);
+
+  const offsetTimestamp = contributionSnapshot(undefined, {
+    generatedAt: '2025-01-02T11:04:05+08:00',
+  });
+  assert.doesNotThrow(() => parseContributionSnapshot(JSON.stringify(offsetTimestamp)));
+});
+
+test('contribution snapshot parsing rejects malformed schemas and unsafe scalar values', () => {
+  assert.throws(() => parseContributionSnapshot('{'), SyntaxError);
+  assert.throws(() => parseContributionSnapshot('[]'), /object/);
+  assert.throws(() => parseContributionSnapshot(JSON.stringify({ ...contributionSnapshot(), extra: true })), /unknown/);
+  assert.throws(
+    () => parseContributionSnapshot(JSON.stringify({ ...contributionSnapshot(), kind: 'other' })),
+    /kind/,
+  );
+  assert.throws(
+    () => parseContributionSnapshot(JSON.stringify({ ...contributionSnapshot(), version: 2 })),
+    /version/,
+  );
+  for (const account of ['', '-octocat', 'octocat-', 'octo--cat', 'a'.repeat(40), 'octo_cat']) {
+    assert.throws(
+      () => parseContributionSnapshot(JSON.stringify({ ...contributionSnapshot(), account })),
+      /account/,
+    );
+  }
+  for (const generatedAt of [
+    '2025-01-02',
+    '2025-02-29T03:04:05Z',
+    '2025-01-02T24:00:00Z',
+    '2025-01-02T03:60:05Z',
+    'not-a-time',
+  ]) {
+    assert.throws(
+      () => parseContributionSnapshot(JSON.stringify({ ...contributionSnapshot(), generatedAt })),
+      /generatedAt/,
+    );
+  }
+  assert.throws(
+    () => parseContributionSnapshot(JSON.stringify({ ...contributionSnapshot(), rangeStart: '2025-02-29' })),
+    /rangeStart/,
+  );
+});
+
+test('contribution snapshot parsing rejects invalid, inconsistent, or non-contiguous days', () => {
+  const unknownDayField = contributionSnapshot();
+  unknownDayField.days[0] = { ...unknownDayField.days[0], extra: true };
+  assert.throws(() => parseContributionSnapshot(JSON.stringify(unknownDayField)), /unknown/);
+
+  for (const replacement of [
+    { count: -1 },
+    { count: 1.5 },
+    { count: Number.MAX_SAFE_INTEGER + 1 },
+    { level: -1 },
+    { level: 5 },
+    { level: 1.5 },
+    { count: 0, level: 1 },
+    { count: 1, level: 0 },
+  ]) {
+    const invalid = contributionSnapshot();
+    invalid.days[10] = { ...invalid.days[10], ...replacement };
+    assert.throws(() => parseContributionSnapshot(JSON.stringify(invalid)), /days\[10\]/);
+  }
+
+  const gap = contributionSnapshot();
+  gap.days.splice(10, 1);
+  assert.throws(() => parseContributionSnapshot(JSON.stringify(gap)), /consecutive/);
+
+  const wrongFirst = contributionSnapshot();
+  wrongFirst.rangeStart = wrongFirst.days[1].date;
+  assert.throws(() => parseContributionSnapshot(JSON.stringify(wrongFirst)), /rangeStart/);
+
+  const wrongLast = contributionSnapshot();
+  wrongLast.rangeEnd = wrongLast.days.at(-2).date;
+  assert.throws(() => parseContributionSnapshot(JSON.stringify(wrongLast)), /rangeEnd/);
+
+  const truncated = contributionSnapshot();
+  truncated.days.splice(0, 7);
+  truncated.rangeStart = truncated.days[0].date;
+  assert.throws(
+    () => parseContributionSnapshot(JSON.stringify(truncated)),
+    /complete contribution grid/,
+  );
+
+  const tooLong = contributionSnapshot('2025-01-04');
+  assert.equal(tooLong.days.length, 371);
+  tooLong.days.push({ date: '2025-01-05', count: 0, level: 0 });
+  tooLong.rangeEnd = '2025-01-05';
+  assert.throws(() => parseContributionSnapshot(JSON.stringify(tooLong)), /at most 371/);
+});
+
+test('snapshot-aware script generation rejects incomplete coverage and existing contributions', () => {
+  const endDate = '2025-01-01';
+  const cells = gridDates(endDate, 'Asia/Singapore');
+  const levels = blankLevels();
+  const paintedDate = '2024-01-08';
+  levels[cells.findIndex((cell) => cell.date === paintedDate)] = 1;
+  const paintedDesign = design({ levels, endDate, counts: [0, 1, 0, 0, 0] });
+
+  const shortAtStart = contributionSnapshot(endDate);
+  shortAtStart.days.shift();
+  shortAtStart.rangeStart = shortAtStart.days[0].date;
+  assert.throws(
+    () => generateScript('bash', paintedDesign, shortAtStart),
+    /complete contribution grid/i,
+  );
+
+  const wrongEnd = contributionSnapshot(endDate);
+  wrongEnd.days.pop();
+  wrongEnd.rangeEnd = wrongEnd.days.at(-1).date;
+  assert.throws(
+    () => generateScript('bash', paintedDesign, wrongEnd),
+    /cover.*rangeEnd/i,
+  );
+
+  const overlap = contributionSnapshot(endDate);
+  const overlapDay = overlap.days.find((day) => day.date === paintedDate);
+  overlapDay.count = 2;
+  overlapDay.level = 1;
+  assert.throws(
+    () => generateScript('bash', paintedDesign, parseContributionSnapshot(JSON.stringify(overlap))),
+    new RegExp(`overlap.*${paintedDate}`, 'i'),
+  );
+});
+
+test('non-overlapping snapshots do not alter scripts, design JSON, or stable export IDs', () => {
+  const endDate = '2025-01-01';
+  const cells = gridDates(endDate, 'Asia/Singapore');
+  const levels = blankLevels();
+  levels[cells.findIndex((cell) => cell.date === endDate)] = 1;
+  const paintedDesign = design({ levels, endDate, counts: [0, 1, 0, 0, 0] });
+  const snapshot = parseContributionSnapshot(JSON.stringify(contributionSnapshot(endDate)));
+
+  const withoutSnapshot = generateScript('bash', paintedDesign);
+  const withSnapshot = generateScript('bash', paintedDesign, snapshot);
+  assert.equal(withSnapshot, withoutSnapshot);
+  assert.equal(serializeDesign(paintedDesign), serializeDesign({ ...paintedDesign, snapshot }));
+
+  assert.throws(() => generateScript('bash', paintedDesign, { ...snapshot, surprise: true }), /unknown/);
 });
 
 test('bash generation emits chronological empty commits and safety gates', () => {

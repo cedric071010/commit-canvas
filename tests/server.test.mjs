@@ -40,7 +40,7 @@ function blankDesign() {
   };
 }
 
-async function fixture({ validationDefaultBranch } = {}) {
+async function fixture({ validationDefaultBranch, submitError } = {}) {
   const calls = [];
   const repository = {
     fullName: 'octocat/commit-canvas-art', owner: 'octocat', name: 'commit-canvas-art',
@@ -58,6 +58,7 @@ async function fixture({ validationDefaultBranch } = {}) {
     async submitPlan({ expectedDefaultBranch, onProgress }) {
       calls.push('submit');
       assert.equal(expectedDefaultBranch, repository.defaultBranch);
+      if (submitError) throw submitError;
       onProgress({ phase: 'creating commits', completed: 1, created: 1 });
       return { repository: repository.fullName, oldHead: repository.head, newHead: 'b'.repeat(40), created: 1, skipped: 0, commitUrl: `${repository.htmlUrl}/commit/${'b'.repeat(40)}` };
     },
@@ -112,6 +113,29 @@ test('POST APIs require same-origin JSON and CSRF', async (t) => {
   }
 });
 
+test('immediate API errors expose only stable sanitized codes', async (t) => {
+  const app = await fixture();
+  t.after(() => app.server.close());
+
+  let response = await fetch(`${app.origin}/api/contributions`, {
+    method: 'POST',
+    headers: { ...app.headers, 'Content-Type': 'text/plain' },
+    body: '{}',
+  });
+  assert.equal(response.status, 415);
+  assert.deepEqual(await response.json(), { error: { code: 'UNSUPPORTED_MEDIA_TYPE' } });
+
+  response = await fetch(`${app.origin}/api/submissions/${'f'.repeat(32)}`, {
+    headers: { 'X-Commit-Canvas-CSRF': 'test-token' },
+  });
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: { code: 'JOB_NOT_FOUND' } });
+
+  response = await fetch(`${app.origin}/api/does-not-exist`);
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: { code: 'API_NOT_FOUND' } });
+});
+
 test('every route rejects an untrusted Host before static or API routing', async (t) => {
   const app = await fixture();
   t.after(() => app.server.close());
@@ -124,6 +148,7 @@ test('static serving exposes only the explicit application allowlist', async (t)
   t.after(() => app.server.close());
   assert.equal((await fetch(`${app.origin}/`)).status, 200);
   assert.equal((await fetch(`${app.origin}/src/core.js`)).status, 200);
+  assert.equal((await fetch(`${app.origin}/src/i18n.js`)).status, 200);
   assert.equal((await fetch(`${app.origin}/README.md`)).status, 404);
   assert.equal((await fetch(`${app.origin}/work/private.commit-canvas-snapshot.json`)).status, 404);
 });
@@ -189,6 +214,37 @@ test('submission rejects a same-SHA default branch change before queueing', asyn
   assert.equal(response.status, 409);
   assert.equal(app.jobs.size, 0);
   assert.equal(app.calls.includes('submit'), false);
+});
+
+test('failed submission jobs expose an allowlisted code without exception text', async (t) => {
+  const leakedMessage = 'secret backend diagnostics must not be returned';
+  const submitError = new Error(leakedMessage);
+  submitError.code = 'HEAD_MOVED';
+  const app = await fixture({ submitError });
+  t.after(() => app.server.close());
+  const design = blankDesign();
+  const { buildCommitPlan } = await import('../src/core.js');
+  const phrase = buildCommitPlan({ ...design, email: account().noreplyEmail }, snapshot()).confirmationPhrase;
+  const response = await fetch(`${app.origin}/api/submissions`, {
+    method: 'POST',
+    headers: app.headers,
+    body: JSON.stringify({
+      repository: app.repository.fullName,
+      expectedDefaultBranch: app.repository.defaultBranch,
+      expectedHead: app.repository.head,
+      design,
+      confirmation: phrase,
+    }),
+  });
+  assert.equal(response.status, 202);
+  const accepted = await response.json();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const status = await fetch(`${app.origin}/api/submissions/${accepted.job.id}`, {
+    headers: { 'X-Commit-Canvas-CSRF': 'test-token' },
+  });
+  const payload = await status.json();
+  assert.deepEqual(payload.job.error, { code: 'HEAD_MOVED' });
+  assert.doesNotMatch(JSON.stringify(payload), /secret backend diagnostics/);
 });
 
 test('static mode keeps API unavailable', async (t) => {

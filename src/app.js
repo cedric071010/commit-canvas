@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, createI18n, localizeDocument } from './i18n.js';
+
 const REQUIRED_EXPORTS = [
   'COLS',
   'ROWS',
@@ -16,6 +18,33 @@ const REQUIRED_EXPORTS = [
 const IMPORT_LIMIT_BYTES = 1024 * 1024;
 const WARNING_COMMITS = 200;
 const PENDING_JOB_STORAGE_KEY = 'commit-canvas-pending-job-id';
+const API_ERROR_CODES = new Set([
+  'ACCOUNT_CHANGED',
+  'AMBIGUOUS_REF_UPDATE',
+  'CLI_FAILED',
+  'CLI_UNAVAILABLE',
+  'DEFAULT_BRANCH_CHANGED',
+  'GITHUB_REQUEST_FAILED',
+  'HEAD_MOVED',
+  'HISTORY_LIMIT_REACHED',
+  'INSUFFICIENT_PERMISSION',
+  'INVALID_INPUT',
+  'INVALID_PLAN',
+  'INVALID_RESPONSE',
+  'UNMANAGED_REPOSITORY',
+  'ACCOUNT_MISMATCH',
+  'API_NOT_FOUND',
+  'CONFIRMATION_MISMATCH',
+  'INTERNAL_ERROR',
+  'JOB_NOT_FOUND',
+  'LIVE_UNAVAILABLE',
+  'PAYLOAD_TOO_LARGE',
+  'REPOSITORY_CHANGED',
+  'REQUEST_FORBIDDEN',
+  'REQUEST_INVALID',
+  'SUBMISSION_ACTIVE',
+  'UNSUPPORTED_MEDIA_TYPE',
+]);
 const TIME_ZONES = [
   'UTC',
   'Asia/Singapore',
@@ -37,8 +66,7 @@ const TIME_ZONES = [
   'America/Sao_Paulo',
 ];
 
-const MONTH_NAMES = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-const WEEKDAY_NAMES = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+const ui = createI18n(DEFAULT_LOCALE);
 
 let toastTimer;
 
@@ -62,11 +90,12 @@ export function projectPlanOntoDates(plannedByDate, nextDates, blockedByDate = n
   return { levels, lostOutsideRange, clearedExisting };
 }
 
-export function contributionCellLabel(snapshotLoaded, existingCount, plannedCount) {
+export function contributionCellLabel(snapshotLoaded, existingCount, plannedCount, locale = DEFAULT_LOCALE) {
+  const labels = createI18n(locale);
   const baseline = snapshotLoaded
-    ? `GitHub 已有 ${existingCount} 次贡献`
-    : '当前 GitHub 贡献未检查';
-  return `${baseline}，计划新增 ${plannedCount} 次`;
+    ? labels.plural('cell.existing', existingCount)
+    : labels.t('cell.unchecked');
+  return labels.t('cell.combined', { baseline, planned: labels.plural('cell.planned', plannedCount) });
 }
 
 export function contributionGrowthConfirmed(beforeByDate, plannedByDate, afterByDate) {
@@ -88,14 +117,14 @@ export function liveConfirmationReady(typedPhrase, expectedPhrase, totalCommits,
 
 function byId(id) {
   const node = document.getElementById(id);
-  if (!node) throw new Error(`页面缺少必要元素：${id}`);
+  if (!node) throw new Error(ui.t('error.missingElement', { id }));
   return node;
 }
 
 function showFatal(error) {
   const toast = document.getElementById('toast');
   if (toast) {
-    toast.textContent = `工具未能启动：${friendlyError(error)}`;
+    toast.textContent = ui.t('error.startup', { message: friendlyError(error) });
     toast.classList.add('is-visible', 'is-error');
   }
   document.querySelectorAll('button, input, select').forEach((control) => {
@@ -104,36 +133,51 @@ function showFatal(error) {
 }
 
 function friendlyError(error) {
-  if (!(error instanceof Error)) return '发生未知错误，请刷新页面重试。';
+  if (!(error instanceof Error)) return ui.t('error.unknownRefresh');
+  if (API_ERROR_CODES.has(error.code)) return ui.t(`apiError.${error.code}`);
   const translations = [
-    [/limit is (\d+)/i, '计划提交超过安全上限（$1 次）。'],
-    [/at least one non-future commit/i, '画布还没有可导出的提交。'],
-    [/valid email address/i, '邮箱格式无效，请检查后重试。'],
-    [/not valid JSON/i, '文件不是有效的 JSON。'],
-    [/contribution snapshot|snapshot/i, '贡献墙快照格式无效。'],
-    [/unsupported design version/i, '这个存档版本暂不支持。'],
-    [/missing or unknown fields/i, '存档字段不完整或包含未知字段。'],
-    [/time zone/i, '存档中的时区无效。'],
-    [/levels/i, '存档中的画布数据无效。'],
-    [/counts/i, '存档中的强度数据无效。'],
-    [/endDate|calendar date|YYYY-MM-DD/i, '日期无效，请检查后重试。'],
+    [/limit is (\d+)/i, (match) => ui.t('error.limit', { count: match[1] })],
+    [/at least one non-future commit/i, () => ui.t('error.noCommit')],
+    [/valid email address/i, () => ui.t('error.email')],
+    [/not valid JSON/i, () => ui.t('error.json')],
+    [/contribution snapshot|snapshot/i, () => ui.t('error.snapshot')],
+    [/unsupported design version/i, () => ui.t('error.designVersion')],
+    [/missing or unknown fields/i, () => ui.t('error.fields')],
+    [/time zone/i, () => ui.t('error.timeZone')],
+    [/levels/i, () => ui.t('error.levels')],
+    [/counts/i, () => ui.t('error.counts')],
+    [/endDate|calendar date|YYYY-MM-DD/i, () => ui.t('error.date')],
   ];
   for (const [pattern, message] of translations) {
-    if (pattern.test(error.message)) return error.message.replace(pattern, message);
+    const match = error.message.match(pattern);
+    if (match) return message(match);
   }
-  return error.message || '发生未知错误，请重试。';
+  return error.message || ui.t('error.unknown');
+}
+
+function apiErrorMessage(code) {
+  return ui.t(API_ERROR_CODES.has(code) ? `apiError.${code}` : 'apiError.INTERNAL_ERROR');
+}
+
+function translatedPhase(phase) {
+  try {
+    return ui.t(`phase.${phase}`);
+  } catch {
+    return String(phase ?? '');
+  }
 }
 
 async function main() {
+  localizeDocument(document, ui);
   const core = await import('./core.js');
   for (const name of REQUIRED_EXPORTS) {
-    if (!(name in core)) throw new Error(`核心模块缺少导出：${name}`);
+    if (!(name in core)) throw new Error(ui.t('error.coreExport', { name }));
   }
 
   const { COLS, ROWS, DEFAULT_LEVEL_COUNTS, MAX_COMMITS } = core;
   const cellCount = COLS * ROWS;
   if (COLS !== 53 || ROWS !== 7 || DEFAULT_LEVEL_COUNTS.length !== 5) {
-    throw new Error('核心模块的画布尺寸或强度配置不兼容。');
+    throw new Error(ui.t('error.coreConfig'));
   }
 
   const elements = {
@@ -232,6 +276,32 @@ async function main() {
     pendingJobId: '',
     submissionContext: null,
   };
+  let liveStatusDescriptor = { key: 'live.status.initial', values: {}, kind: 'info', link: null };
+
+  function applyLocale(locale) {
+    window.clearTimeout(toastTimer);
+    elements.toast.classList.remove('is-visible');
+    ui.setLocale(locale);
+    localizeDocument(document, ui);
+    document.querySelectorAll('[data-locale]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.locale === ui.locale));
+    });
+    const browserOption = elements.timezone.querySelector('[data-browser-time-zone="true"]');
+    if (browserOption) browserOption.textContent = ui.t('timezone.browser', { timeZone: browserOption.value });
+    if (state.dates.length) {
+      renderMonths();
+      renderAllCells();
+      updateSummary();
+    }
+    renderSnapshotStatus();
+    renderLiveMode();
+    renderLiveStatusDescriptor();
+    setLiveProgress(elements.liveProgress.value, elements.liveProgress.max);
+    elements.zoomLabel.textContent = ui.t(elements.canvasShell.classList.contains('is-zoomed') ? 'view.zoomOut' : 'view.zoomIn');
+    elements.panLabel.textContent = ui.t(state.panMode ? 'view.draw' : 'view.pan');
+    renderLiveReview();
+    renderGeneratedScriptMeta();
+  }
 
   function toast(message, kind = 'info') {
     window.clearTimeout(toastTimer);
@@ -266,23 +336,23 @@ async function main() {
   function updateSummary() {
     const summary = safeSummary();
     const total = totalOf(summary);
-    elements.total.textContent = total.toLocaleString('zh-CN');
-    elements.paintedDays.textContent = paintedOf(summary).toLocaleString('zh-CN');
+    elements.total.textContent = ui.formatNumber(total);
+    elements.paintedDays.textContent = ui.formatNumber(paintedOf(summary));
     const lastUsable = [...state.dates].reverse().find((cell) => !cell.isFuture);
     elements.dateRange.textContent = state.dates.length && lastUsable
-      ? `${state.dates[0].date} — ${lastUsable.date}`
+      ? `${ui.formatIsoDate(state.dates[0].date)} — ${ui.formatIsoDate(lastUsable.date)}`
       : '—';
 
     elements.limitStatus.classList.remove('is-warning', 'is-error');
     const statusText = elements.limitStatus.lastElementChild;
     if (total >= MAX_COMMITS) {
       elements.limitStatus.classList.add('is-error');
-      statusText.textContent = `已达 ${MAX_COMMITS} 次安全上限`;
+      statusText.textContent = ui.t('summary.limit', { count: ui.formatNumber(MAX_COMMITS) });
     } else if (total >= WARNING_COMMITS) {
       elements.limitStatus.classList.add('is-warning');
-      statusText.textContent = `提交较多：${total} / ${MAX_COMMITS}`;
+      statusText.textContent = ui.t('summary.warning', { total: ui.formatNumber(total), limit: ui.formatNumber(MAX_COMMITS) });
     } else {
-      statusText.textContent = `可以继续创作 · 上限 ${MAX_COMMITS}`;
+      statusText.textContent = ui.t('summary.ready', { limit: ui.formatNumber(MAX_COMMITS) });
     }
     renderLivePlanSummary();
   }
@@ -301,9 +371,18 @@ async function main() {
     cell.classList.toggle('has-plan', level > 0);
     cell.disabled = dateInfo.isFuture;
     cell.dataset.date = dateInfo.date;
-    const contributionLabel = contributionCellLabel(Boolean(state.snapshot), existingCount, count);
-    cell.setAttribute('aria-label', `${dateInfo.date}，${WEEKDAY_NAMES[dateInfo.row]}，${contributionLabel}${existingCount > 0 ? '，已有贡献日期只读' : ''}${dateInfo.isFuture ? '，未来日期已锁定' : ''}`);
-    cell.title = `${dateInfo.date} · ${contributionLabel}${existingCount > 0 ? ' · 已有贡献日期只读' : ''}`;
+    const contributionLabel = contributionCellLabel(Boolean(state.snapshot), existingCount, count, ui.locale);
+    const qualifiers = [
+      existingCount > 0 ? ui.t('cell.readOnly') : '',
+      dateInfo.isFuture ? ui.t('cell.future') : '',
+    ].filter(Boolean).map((value) => ui.t('cell.qualifier', { value })).join('');
+    cell.setAttribute('aria-label', ui.t('cell.parts', {
+      date: ui.formatIsoDate(dateInfo.date),
+      weekday: ui.formatWeekday(dateInfo.date),
+      contribution: contributionLabel,
+      qualifiers,
+    }));
+    cell.title = [ui.formatIsoDate(dateInfo.date), contributionLabel, existingCount > 0 ? ui.t('cell.readOnly') : ''].filter(Boolean).join(' · ');
   }
 
   function renderAllCells() {
@@ -320,7 +399,7 @@ async function main() {
       if (date) {
         const month = date.slice(0, 7);
         if (month !== previousMonth) {
-          label.textContent = MONTH_NAMES[Number(date.slice(5, 7)) - 1];
+          label.textContent = ui.formatMonth(date);
           previousMonth = month;
         }
       }
@@ -347,7 +426,7 @@ async function main() {
   function renderDates() {
     state.dates = core.gridDates(elements.endDate.value, elements.timezone.value);
     if (!Array.isArray(state.dates) || state.dates.length !== cellCount) {
-      throw new Error('核心模块返回了不完整的日期网格。');
+      throw new Error(ui.t('error.coreGrid'));
     }
     for (const dateInfo of state.dates) {
       if (dateInfo.isFuture) state.levels[dateInfo.index] = 0;
@@ -429,7 +508,7 @@ async function main() {
     state.redo.push(snapshot());
     restoreSnapshot(previous);
     updateHistoryButtons();
-    toast('已撤销上一步。');
+    toast(ui.t('toast.undo'));
   }
 
   function redo() {
@@ -438,7 +517,7 @@ async function main() {
     state.undo.push(snapshot());
     restoreSnapshot(next);
     updateHistoryButtons();
-    toast('已重做。');
+    toast(ui.t('toast.redo'));
   }
 
   function selectLevel(level) {
@@ -449,7 +528,9 @@ async function main() {
       button.classList.toggle('is-selected', selected);
       button.setAttribute('aria-pressed', String(selected));
     });
-    toast(level === 0 ? '已选择橡皮。' : `已选择强度 ${level}：每天 ${state.counts[level]} 次提交。`);
+    toast(level === 0
+      ? ui.t('toast.eraser')
+      : ui.t('toast.level', { level: ui.formatNumber(level), count: ui.formatNumber(state.counts[level]) }));
   }
 
   function paint(index, quiet = false) {
@@ -458,7 +539,7 @@ async function main() {
     const summary = safeSummary();
     const projected = totalOf(summary) - state.counts[state.levels[index]] + state.counts[state.selectedLevel];
     if (projected > MAX_COMMITS) {
-      if (!quiet) toast(`不能继续：设计最多生成 ${MAX_COMMITS} 次提交。`, 'error');
+      if (!quiet) toast(ui.t('toast.planLimit', { count: ui.formatNumber(MAX_COMMITS) }), 'error');
       return false;
     }
     state.levels[index] = state.selectedLevel;
@@ -483,7 +564,7 @@ async function main() {
     setRovingIndex(index, true);
   }
 
-  function confirmAction({ title, message, confirmLabel = '确认', danger = true }) {
+  function confirmAction({ title, message, confirmLabel = ui.t('dialog.confirm'), danger = true }) {
     elements.confirmTitle.textContent = title;
     elements.confirmMessage.textContent = message;
     elements.confirmAction.textContent = confirmLabel;
@@ -553,21 +634,21 @@ async function main() {
   async function applyTemplate(name) {
     if (paintedOf(safeSummary()) > 0) {
       const accepted = await confirmAction({
-        title: '替换当前画布？',
-        message: '应用模板会替换现有图案。你仍可使用“撤销”恢复。',
-        confirmLabel: '应用模板',
+        title: ui.t('template.replace.title'),
+        message: ui.t('template.replace.body'),
+        confirmLabel: ui.t('template.replace.confirm'),
       });
       if (!accepted) return;
     }
     const next = templateLevels(name);
     if (totalOf(safeSummary(next)) > MAX_COMMITS) {
-      toast(`模板超过 ${MAX_COMMITS} 次提交的安全上限。`, 'error');
+      toast(ui.t('template.limit', { count: ui.formatNumber(MAX_COMMITS) }), 'error');
       return;
     }
     const before = snapshot();
     restoreLevels(next);
     pushUndo(before);
-    toast('模板已应用。');
+    toast(ui.t('template.applied'));
   }
 
   function currentDesign() {
@@ -592,8 +673,8 @@ async function main() {
       elements.snapshotAccount.textContent = '—';
       elements.snapshotGeneratedAt.textContent = '—';
       elements.snapshotRange.textContent = '—';
-      elements.snapshotExistingStatus.textContent = '未检查';
-      elements.snapshotNotice.textContent = '尚未导入快照。当前画布无法判断哪些日期已经有贡献。';
+      elements.snapshotExistingStatus.textContent = ui.t('snapshot.unchecked');
+      elements.snapshotNotice.textContent = ui.t('snapshot.none.notice');
       return;
     }
     const existingDays = state.snapshot.days.filter((day) => day.count > 0).length;
@@ -601,15 +682,15 @@ async function main() {
     elements.snapshotAccount.textContent = state.snapshot.account;
     elements.snapshotGeneratedAt.textContent = Number.isNaN(generatedAt.valueOf())
       ? state.snapshot.generatedAt
-      : generatedAt.toLocaleString('zh-CN');
-    elements.snapshotRange.textContent = `${state.snapshot.rangeStart} — ${state.snapshot.rangeEnd}`;
-    elements.snapshotExistingStatus.textContent = `${existingDays} 天已有贡献`;
+      : ui.formatDateTime(generatedAt);
+    elements.snapshotRange.textContent = `${ui.formatIsoDate(state.snapshot.rangeStart)} — ${ui.formatIsoDate(state.snapshot.rangeEnd)}`;
+    elements.snapshotExistingStatus.textContent = ui.plural('snapshot.days', existingDays);
     elements.snapshotNotice.textContent = state.liveSnapshotAccount === state.snapshot.account
-      ? `已从 GitHub 刷新 @${state.snapshot.account} 的贡献墙；画布结束日期已对齐。`
-      : `已载入 @${state.snapshot.account} 的本地快照；画布结束日期已对齐快照范围。`;
+      ? ui.t('snapshot.liveLoaded', { account: state.snapshot.account })
+      : ui.t('snapshot.fileLoaded', { account: state.snapshot.account });
   }
 
-  function unloadSnapshot(message = '快照已卸载；现有设计未改变。') {
+  function unloadSnapshot(message = ui.t('snapshot.unloaded')) {
     state.snapshot = null;
     state.byDate = new Map();
     state.liveSnapshotAccount = '';
@@ -625,13 +706,13 @@ async function main() {
     const projection = projectPlanOntoDates(plannedLevelsByDate(), nextDates, nextByDate);
     if (confirmChanges && (projection.clearedExisting > 0 || projection.lostOutsideRange > 0)) {
       const effects = [
-        projection.clearedExisting > 0 ? `清除 ${projection.clearedExisting} 个与已有贡献重叠的计划日期` : '',
-        projection.lostOutsideRange > 0 ? `丢失 ${projection.lostOutsideRange} 个移出新 53 周范围的计划日期` : '',
-      ].filter(Boolean).join('，并');
+        projection.clearedExisting > 0 ? ui.plural('snapshot.effect.clear', projection.clearedExisting) : '',
+        projection.lostOutsideRange > 0 ? ui.plural('snapshot.effect.lose', projection.lostOutsideRange) : '',
+      ].filter(Boolean).reduce((first, second) => first ? ui.t('snapshot.effect.join', { first, second }) : second, '');
       const accepted = await confirmAction({
-        title: '导入快照并调整当前计划？',
-        message: `把结束日期对齐到 ${parsed.rangeEnd} 会${effects}。取消将保留当前快照、日期和全部计划。`,
-        confirmLabel: '导入并调整',
+        title: ui.t('snapshot.adjust.title'),
+        message: ui.t('snapshot.adjust.body', { date: ui.formatIsoDate(parsed.rangeEnd), effects }),
+        confirmLabel: ui.t('snapshot.adjust.confirm'),
       });
       if (!accepted) return null;
     }
@@ -657,7 +738,7 @@ async function main() {
   async function importContributionSnapshot(file) {
     if (!file) return;
     if (file.size > IMPORT_LIMIT_BYTES) {
-      toast('文件超过 1 MiB，已拒绝导入。', 'error');
+      toast(ui.t('error.fileTooLarge'), 'error');
       return;
     }
     try {
@@ -665,18 +746,21 @@ async function main() {
       const projection = await applyContributionSnapshot(parsed, { source: 'file' });
       if (!projection) return;
       const changes = [
-        projection.clearedExisting > 0 ? `清除 ${projection.clearedExisting} 个重叠日期` : '',
-        projection.lostOutsideRange > 0 ? `移除 ${projection.lostOutsideRange} 个范围外日期` : '',
-      ].filter(Boolean).join('，');
-      toast(`已导入 @${parsed.account} 的贡献墙快照${changes ? `，并${changes}` : ''}。`);
+        projection.clearedExisting > 0 ? ui.plural('snapshot.change.clear', projection.clearedExisting) : '',
+        projection.lostOutsideRange > 0 ? ui.plural('snapshot.change.remove', projection.lostOutsideRange) : '',
+      ].filter(Boolean).join(ui.locale === 'zh-Hans' ? '，' : ', ');
+      toast(ui.t('snapshot.imported', {
+        account: parsed.account,
+        changes: changes ? `${ui.t('snapshot.changePrefix')}${changes}` : '',
+      }));
     } catch (error) {
-      toast(`快照导入失败：${friendlyError(error)}`, 'error');
+      toast(ui.t('snapshot.importFailed', { message: friendlyError(error) }), 'error');
     } finally {
       elements.snapshotFile.value = '';
     }
   }
 
-  function setLiveStatus(message, kind = 'info', link = null) {
+  function renderLiveStatus(message, kind = 'info', link = null) {
     elements.liveSubmitStatus.replaceChildren(document.createTextNode(message));
     elements.liveSubmitStatus.classList.toggle('is-error', kind === 'error');
     if (link?.href) {
@@ -688,11 +772,27 @@ async function main() {
       } catch {
         return;
       }
-      anchor.textContent = link.label || '在 GitHub 查看';
+      anchor.textContent = link.labelKey ? ui.t(link.labelKey) : (link.label || ui.t('link.github'));
       anchor.target = '_blank';
       anchor.rel = 'noopener';
       elements.liveSubmitStatus.append(' ', anchor);
     }
+  }
+
+  function renderLiveStatusDescriptor() {
+    const descriptor = liveStatusDescriptor;
+    const values = typeof descriptor.values === 'function' ? descriptor.values() : descriptor.values;
+    const message = descriptor.key
+      ? (descriptor.pluralCount === undefined
+        ? ui.t(descriptor.key, values)
+        : ui.plural(descriptor.key, descriptor.pluralCount, values))
+      : descriptor.message;
+    renderLiveStatus(message, descriptor.kind, descriptor.link);
+  }
+
+  function setLiveStatusKey(key, values = {}, kind = 'info', link = null, pluralCount) {
+    liveStatusDescriptor = { key, values, kind, link, pluralCount };
+    renderLiveStatusDescriptor();
   }
 
   function setLiveProgress(completed = 0, total = 0, phase = '') {
@@ -700,30 +800,41 @@ async function main() {
     const safeCompleted = Math.max(0, Math.min(safeTotal, Number(completed) || 0));
     elements.liveProgress.max = safeTotal || 1;
     elements.liveProgress.value = safeCompleted;
-    elements.liveProgress.setAttribute('aria-valuetext', `${safeCompleted} / ${safeTotal}${phase ? `，${phase}` : ''}`);
+    const displayPhase = phase ? translatedPhase(phase) : '';
+    elements.liveProgress.setAttribute('aria-valuetext', ui.t('progress.value', {
+      completed: ui.formatNumber(safeCompleted),
+      total: ui.formatNumber(safeTotal),
+      phase: displayPhase ? ui.t('progress.phase', { phase: displayPhase }) : '',
+    }));
   }
 
   function renderLivePlanSummary() {
     const total = totalOf(safeSummary());
     elements.livePlanSummary.textContent = total > 0
-      ? `当前计划 ${total} 次提交；提交前会再次刷新贡献墙。`
-      : '画布中还没有可提交的计划。';
+      ? ui.plural('live.plan.count', total)
+      : ui.t('live.plan.empty');
     elements.submitLive.disabled = !state.live || state.submitting || state.pendingJobId || total === 0 || !state.repository;
   }
 
   function renderLiveMode() {
     const connected = state.live && Boolean(state.account);
-    elements.liveModeBadge.textContent = connected ? 'Live' : 'Static';
+    elements.liveModeBadge.textContent = ui.t(connected ? 'live.badge.live' : 'live.badge.static');
     elements.liveModeBadge.classList.toggle('is-live', connected);
     elements.connectStatus.textContent = connected
-      ? `已安全连接 @${state.account.login}。凭据保留在服务器会话中。`
-      : '当前为静态模式。请先使用 gh 登录 GitHub，再从本地 Live 服务打开此页面，才能刷新或直接提交。';
+      ? ui.t('live.connected', { account: state.account.login })
+      : ui.t('live.static');
     elements.liveAccount.textContent = connected
-      ? `@${state.account.login}${state.account.name ? `（${state.account.name}）` : ''}`
-      : '未连接';
+      ? (state.account.name
+        ? ui.t('live.accountName', { account: state.account.login, name: state.account.name })
+        : `@${state.account.login}`)
+      : ui.t('live.notConnected');
     elements.liveRepository.textContent = state.repository
-      ? `${state.repository.fullName} · ${state.repository.visibility} · ${state.repository.defaultBranch}`
-      : '尚未设置托管仓库';
+      ? ui.t('live.repositoryFact', {
+        repository: state.repository.fullName,
+        visibility: ui.t(`repo.visibility.${state.repository.visibility}`),
+        branch: state.repository.defaultBranch,
+      })
+      : ui.t('live.notConfigured');
     elements.refreshContributions.disabled = !connected || state.submitting;
     elements.managedRepoName.disabled = !connected || state.submitting;
     elements.managedRepoVisibility.disabled = !connected || state.submitting;
@@ -736,7 +847,7 @@ async function main() {
   }
 
   function rememberPendingJob(jobId) {
-    if (!/^[a-f0-9]{32}$/.test(jobId)) throw new Error('服务器返回的任务编号无效。');
+    if (!/^[a-f0-9]{32}$/.test(jobId)) throw new Error(ui.t('error.jobId'));
     state.pendingJobId = jobId;
     sessionStorage.setItem(PENDING_JOB_STORAGE_KEY, jobId);
   }
@@ -765,19 +876,22 @@ async function main() {
     else if (path === '/api/contributions') response = await fetch('/api/contributions', options);
     else if (path === '/api/repository') response = await fetch('/api/repository', options);
     else if (path === '/api/submissions') response = await fetch('/api/submissions', options);
-    else throw new Error('拒绝访问未知的 API 路径。');
+    else throw new Error(ui.t('error.apiPath'));
     return readApiResponse(response);
   }
 
   async function readApiResponse(response) {
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.toLowerCase().includes('application/json')) {
-      throw new Error(response.ok ? '服务器未启用 Live API。' : `服务器返回了 ${response.status}。`);
+      throw new Error(response.ok
+        ? ui.t('error.apiUnavailable')
+        : ui.t('error.serverStatus', { status: response.status }));
     }
     const payload = await response.json();
     if (!response.ok) {
-      const message = payload?.error?.message || payload?.error || payload?.message;
-      const error = new Error(message || `请求失败（${response.status}）。`);
+      const code = API_ERROR_CODES.has(payload?.error?.code) ? payload.error.code : 'INTERNAL_ERROR';
+      const error = new Error(apiErrorMessage(code));
+      error.code = code;
       error.status = response.status;
       throw error;
     }
@@ -796,22 +910,24 @@ async function main() {
   }
 
   async function refreshLiveContributions({ quiet = false, confirmChanges = true } = {}) {
-    if (!state.live || !state.account) throw new Error('Live 模式尚未连接。');
+    if (!state.live || !state.account) throw new Error(ui.t('error.liveDisconnected'));
     elements.refreshContributions.disabled = true;
-    if (!quiet) setLiveStatus('正在刷新 GitHub 贡献墙…');
+    if (!quiet) setLiveStatusKey('live.refreshing');
     try {
       const payload = await apiJson('/api/contributions', {
         method: 'POST',
         body: { endDate: elements.endDate.value },
       });
       const parsed = core.parseContributionSnapshot(JSON.stringify(payload));
-      if (parsed.account !== state.account.login) throw new Error('返回的贡献墙不属于当前连接账户。');
+      if (parsed.account !== state.account.login) throw new Error(ui.t('error.accountMismatch'));
       const projection = await applyContributionSnapshot(parsed, { source: 'live', confirmChanges });
       if (!projection) return null;
       if (!quiet) {
-        setLiveStatus(projection.clearedExisting > 0
-          ? `贡献墙已刷新；已清除 ${projection.clearedExisting} 个与现有贡献重叠的计划日期，请重新审阅。`
-          : '贡献墙已刷新。GitHub 新贡献的索引可能需要一些时间。');
+        if (projection.clearedExisting > 0) {
+          setLiveStatusKey('live.refreshedCleared', {}, 'info', null, projection.clearedExisting);
+        } else {
+          setLiveStatusKey('live.refreshed');
+        }
       }
       return projection;
     } finally {
@@ -824,24 +940,24 @@ async function main() {
     const name = elements.managedRepoName.value.trim();
     const visibility = elements.managedRepoVisibility.value;
     if (!/^commit-canvas(?:-[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?)?$/.test(name)) {
-      setLiveStatus('仓库名必须是 commit-canvas，或以 commit-canvas- 开头并只包含小写字母、数字和连字符。', 'error');
+      setLiveStatusKey('repo.name.error', {}, 'error');
       elements.managedRepoName.focus();
       return;
     }
     elements.setupRepository.disabled = true;
-    setLiveStatus('正在设置托管仓库…');
+    setLiveStatusKey('repo.settingUp');
     try {
       const payload = await apiJson('/api/repository', { method: 'POST', body: { name, visibility } });
       if (!payload?.repository?.fullName || !payload.repository.defaultBranch || !payload.repository.head) {
-        throw new Error('服务器返回的仓库信息不完整。');
+        throw new Error(ui.t('error.repositoryPayload'));
       }
       state.repository = payload.repository;
       renderLiveMode();
-      setLiveStatus('托管仓库已准备好。', 'info', payload.repository.htmlUrl
-        ? { href: payload.repository.htmlUrl, label: '打开仓库' }
+      setLiveStatusKey('repo.ready', {}, 'info', payload.repository.htmlUrl
+        ? { href: payload.repository.htmlUrl, labelKey: 'repo.open' }
         : null);
     } catch (error) {
-      setLiveStatus(`无法设置仓库：${friendlyError(error)}`, 'error');
+      setLiveStatusKey('repo.failed', () => ({ message: friendlyError(error) }), 'error');
     } finally {
       renderLiveMode();
     }
@@ -851,41 +967,53 @@ async function main() {
     return { ...currentDesign(), email: state.account.noreplyEmail };
   }
 
+  function renderLiveReview() {
+    const plan = state.livePlan;
+    if (!plan || !state.account || !state.repository) return;
+    const dates = [...new Set(plan.commits.map((commit) => commit.timestamp.slice(0, 10)))];
+    elements.liveReviewAccount.textContent = `@${state.account.login} · ${state.account.noreplyEmail}`;
+    elements.liveReviewRepository.textContent = state.repository.fullName;
+    elements.liveReviewBranch.textContent = state.repository.defaultBranch;
+    elements.liveReviewCount.textContent = ui.formatNumber(plan.totalCommits);
+    elements.liveReviewDates.textContent = `${ui.formatIsoDate(dates[0])} — ${ui.formatIsoDate(dates.at(-1))}`;
+    elements.liveConfirmPhrase.textContent = plan.confirmationPhrase;
+  }
+
   async function openLiveReview() {
     if (state.submitting) return;
     if (state.pendingJobId) {
-      setLiveStatus(`任务 ${state.pendingJobId} 的远端结果仍未确认。继续查询或在 GitHub 核对仓库后放弃本地记录，才能提交新计划。`, 'error');
+      setLiveStatusKey('live.pendingBlocked', { id: state.pendingJobId }, 'error');
       return;
     }
     if (!state.live || !state.account) {
-      setLiveStatus('Live 模式未连接；请从已配置的本地服务打开页面。', 'error');
+      setLiveStatusKey('live.openLocal', {}, 'error');
       return;
     }
     if (!state.repository) {
-      setLiveStatus('请先设置一个托管仓库。', 'error');
+      setLiveStatusKey('live.setupFirst', {}, 'error');
       return;
     }
     if (totalOf(safeSummary()) === 0) {
-      setLiveStatus('请先绘制至少一个提交。', 'error');
+      setLiveStatusKey('live.drawFirst', {}, 'error');
       return;
     }
     elements.submitLive.disabled = true;
-    setLiveStatus('提交前正在刷新贡献墙…');
+    setLiveStatusKey('live.refreshBefore');
     try {
       const projection = await refreshLiveContributions({ quiet: true, confirmChanges: true });
       if (!projection) {
-        setLiveStatus('提交前刷新已取消；计划未改变。请确认如何处理重叠日期后再审阅。', 'error');
+        setLiveStatusKey('live.refreshCancelled', {}, 'error');
         return;
       }
       if (projection.clearedExisting > 0) {
-        setLiveStatus(`刷新后发现重叠，已清除 ${projection.clearedExisting} 个计划日期。请审阅画布后再提交。`, 'error');
+        setLiveStatusKey('live.overlap', {}, 'error', null, projection.clearedExisting);
         return;
       }
-      if (state.liveSnapshotAccount !== state.account.login) throw new Error('需要当前连接账户的最新贡献墙。');
+      if (state.liveSnapshotAccount !== state.account.login) throw new Error(ui.t('error.currentSnapshot'));
       const design = liveDesign();
       const plan = core.buildCommitPlan(design, state.snapshot);
       if (!plan?.confirmationPhrase || !Array.isArray(plan.commits) || plan.totalCommits < 1) {
-        throw new Error('无法建立可提交计划。');
+        throw new Error(ui.t('error.plan'));
       }
       state.livePlan = {
         ...plan,
@@ -893,13 +1021,7 @@ async function main() {
         expectedHead: state.repository.head,
         expectedDefaultBranch: state.repository.defaultBranch,
       };
-      const dates = [...new Set(plan.commits.map((commit) => commit.timestamp.slice(0, 10)))];
-      elements.liveReviewAccount.textContent = `@${state.account.login} · ${state.account.noreplyEmail}`;
-      elements.liveReviewRepository.textContent = state.repository.fullName;
-      elements.liveReviewBranch.textContent = state.repository.defaultBranch;
-      elements.liveReviewCount.textContent = String(plan.totalCommits);
-      elements.liveReviewDates.textContent = `${dates[0]} — ${dates.at(-1)}`;
-      elements.liveConfirmPhrase.textContent = plan.confirmationPhrase;
+      renderLiveReview();
       elements.liveConfirmInput.value = '';
       elements.liveHighVolumeConfirm.checked = false;
       elements.liveHighVolumeConfirmWrap.hidden = plan.totalCommits < WARNING_COMMITS;
@@ -907,7 +1029,7 @@ async function main() {
       elements.liveDialog.showModal();
       elements.liveConfirmInput.focus();
     } catch (error) {
-      setLiveStatus(`无法开始审阅：${friendlyError(error)}`, 'error');
+      setLiveStatusKey('live.reviewFailed', () => ({ message: friendlyError(error) }), 'error');
     } finally {
       renderLiveMode();
     }
@@ -917,11 +1039,15 @@ async function main() {
     let current = job;
     while (current.status !== 'succeeded' && current.status !== 'failed') {
       setLiveProgress(current.completed, current.total, current.phase);
-      setLiveStatus(`服务器已接受任务：${current.phase || current.status}（${current.completed || 0} / ${current.total || 0}）。贡献索引尚未确认。`);
+      setLiveStatusKey('live.taskAccepted', () => ({
+        phase: translatedPhase(current.phase || current.status),
+        completed: ui.formatNumber(current.completed || 0),
+        total: ui.formatNumber(current.total || 0),
+      }));
       await new Promise((resolve) => window.setTimeout(resolve, 750));
       const payload = await getSubmissionJob(current.id);
       current = payload.job;
-      if (!current?.id) throw new Error('服务器返回的任务状态不完整。');
+      if (!current?.id) throw new Error(ui.t('error.jobPayload'));
     }
     setLiveProgress(current.completed, current.total, current.phase);
     return current;
@@ -930,23 +1056,23 @@ async function main() {
   function acceptedJobInterrupted(error) {
     const jobId = state.pendingJobId;
     if (error?.status === 404) {
-      setLiveStatus(`本地服务已找不到任务 ${jobId}（可能因服务重启或任务记录被清理）。这不表示远端失败。请先在 GitHub 核对仓库，再选择继续查询或放弃本地任务记录。`, 'error');
+      setLiveStatusKey('live.taskLost', { id: jobId }, 'error');
       return;
     }
-    setLiveStatus(`任务 ${jobId} 已被服务器接受，但状态查询暂时中断：${friendlyError(error)}。这不表示任务失败；请继续查询。`, 'error');
+    setLiveStatusKey('live.pollInterrupted', () => ({ id: jobId, message: friendlyError(error) }), 'error');
   }
 
   async function dismissPendingSubmission() {
     if (!state.pendingJobId || state.submitting) return;
     const accepted = await confirmAction({
-      title: '放弃本地任务记录？',
-      message: `任务 ${state.pendingJobId} 的远端结果仍然未知。请先在 GitHub 核对目标仓库；放弃只会清除本浏览器的查询记录，不会取消、撤销或判断远端任务。`,
-      confirmLabel: '已核对，放弃记录',
+      title: ui.t('live.dismiss.title'),
+      message: ui.t('live.dismiss.body', { id: state.pendingJobId }),
+      confirmLabel: ui.t('live.dismiss.confirm'),
     });
     if (!accepted) return;
     forgetPendingJob();
     renderLiveMode();
-    setLiveStatus('本地任务记录已清除。此操作没有更改或判断 GitHub 上的远端结果。');
+    setLiveStatusKey('live.dismiss.done');
   }
 
   async function finishSuccessfulSubmission(completed, context) {
@@ -964,7 +1090,6 @@ async function main() {
     const resultSha = completed.result?.newHead;
     const created = Number.isSafeInteger(completed.result?.created) ? completed.result.created : completed.created;
     const skipped = Number.isSafeInteger(completed.result?.skipped) ? completed.result.skipped : completed.skipped;
-    const countDetails = `创建 ${created ?? 0} 次，跳过 ${skipped ?? 0} 次`;
     let contributionConfirmed = false;
     if (context && created > 0 && skipped === 0) {
       try {
@@ -976,18 +1101,27 @@ async function main() {
         );
       } catch { /* A failed indexing check does not change the successful push result. */ }
     }
-    const resultDetails = resultSha ? `，提交 ${resultSha.slice(0, 12)}` : '';
-    let message;
+    const detailsForLocale = () => {
+      const countDetails = ui.t('live.countDetails', {
+        created: ui.formatNumber(created ?? 0),
+        skipped: ui.formatNumber(skipped ?? 0),
+      });
+      const resultDetails = resultSha ? ui.t('live.shaDetails', { sha: resultSha.slice(0, 12) }) : '';
+      return `${countDetails}${resultDetails}`;
+    };
+    let messageKey;
     if (created === 0) {
-      message = `任务完成（${countDetails}${resultDetails}）。全部计划提交已存在，因此没有创建新提交。`;
+      messageKey = 'live.result.none';
     } else if (skipped > 0) {
-      message = `提交成功（${countDetails}${resultDetails}）。部分提交被跳过，无法按日期即时确认贡献增长；请稍后刷新 GitHub 贡献墙。`;
+      messageKey = 'live.result.partial';
     } else if (contributionConfirmed) {
-      message = `提交成功（${countDetails}${resultDetails}）。GitHub 贡献墙已确认更新。`;
+      messageKey = 'live.result.confirmed';
     } else {
-      message = `提交成功（${countDetails}${resultDetails}），等待 GitHub 索引（最长可能 24 小时）。`;
+      messageKey = 'live.result.indexing';
     }
-    setLiveStatus(message, 'info', resultUrl ? { href: resultUrl, label: '查看远程提交' } : null);
+    setLiveStatusKey(messageKey, () => ({ details: detailsForLocale() }), 'info', resultUrl
+      ? { href: resultUrl, labelKey: 'live.result.link' }
+      : null);
   }
 
   async function continueAcceptedSubmission(initialJob = null) {
@@ -998,12 +1132,12 @@ async function main() {
       const firstJob = initialJob || (await getSubmissionJob(state.pendingJobId)).job;
       const completed = await pollSubmission(firstJob);
       if (completed.status === 'failed') {
-        const message = completed.error?.message || completed.error || '远程提交失败。';
+        const code = API_ERROR_CODES.has(completed.error?.code) ? completed.error.code : 'INTERNAL_ERROR';
         forgetPendingJob();
-        setLiveStatus(`Live 提交失败：${message}`, 'error');
+        setLiveStatusKey('live.failed', () => ({ message: apiErrorMessage(code) }), 'error');
         return;
       }
-      if (completed.status !== 'succeeded') throw new Error('服务器返回了未知任务状态。');
+      if (completed.status !== 'succeeded') throw new Error(ui.t('error.jobUnknownStatus'));
       await finishSuccessfulSubmission(completed, state.submissionContext);
       forgetPendingJob();
     } catch (error) {
@@ -1030,7 +1164,7 @@ async function main() {
     elements.closeLiveDialog.disabled = true;
     renderLiveMode();
     setLiveProgress(0, plan.totalCommits, 'queued');
-    setLiveStatus('正在将计划交给服务器…');
+    setLiveStatusKey('live.handingOff');
     const plannedCountsByDate = new Map();
     for (const commit of plan.commits) {
       const date = commit.timestamp.slice(0, 10);
@@ -1050,7 +1184,7 @@ async function main() {
           confirmation: plan.confirmationPhrase,
         },
       });
-      if (!payload?.job?.id) throw new Error('服务器没有返回任务编号。');
+      if (!payload?.job?.id) throw new Error(ui.t('error.jobMissing'));
       rememberPendingJob(payload.job.id);
       state.submissionContext = { plan, contributionCountsBeforeSubmit, plannedCountsByDate };
       elements.liveDialog.close();
@@ -1058,7 +1192,7 @@ async function main() {
       await continueAcceptedSubmission(payload.job);
     } catch (error) {
       if (state.pendingJobId) acceptedJobInterrupted(error);
-      else setLiveStatus(`无法提交计划：${friendlyError(error)}`, 'error');
+      else setLiveStatusKey('live.submitFailed', () => ({ message: friendlyError(error) }), 'error');
     } finally {
       state.submitting = false;
       if (!state.pendingJobId) state.livePlan = null;
@@ -1072,7 +1206,7 @@ async function main() {
     try {
       const session = await apiJson('/api/session');
       if (session?.live !== true || !session.csrfToken || !session.account?.login || !session.account?.noreplyEmail) {
-        throw new Error('Live 会话不可用。');
+        throw new Error(ui.t('error.liveSession'));
       }
       state.live = true;
       state.csrfToken = session.csrfToken;
@@ -1086,7 +1220,7 @@ async function main() {
       try {
         await refreshLiveContributions();
       } catch (error) {
-        setLiveStatus(`已连接，但无法刷新贡献墙：${friendlyError(error)}`, 'error');
+        setLiveStatusKey('live.connectedRefreshFailed', () => ({ message: friendlyError(error) }), 'error');
       }
     } catch {
       state.live = false;
@@ -1112,7 +1246,7 @@ async function main() {
     try {
       const serialized = core.serializeDesign(currentDesign());
       downloadText(serialized, `commit-canvas-${elements.endDate.value}.json`, 'application/json;charset=utf-8');
-      toast('设计 JSON 已下载。');
+      toast(ui.t('archive.downloaded'));
     } catch (error) {
       toast(friendlyError(error), 'error');
     }
@@ -1121,16 +1255,16 @@ async function main() {
   async function importJson(file) {
     if (!file) return;
     if (file.size > IMPORT_LIMIT_BYTES) {
-      toast('文件超过 1 MiB，已拒绝导入。', 'error');
+      toast(ui.t('error.fileTooLarge'), 'error');
       return;
     }
     try {
       const parsed = core.parseDesign(await file.text());
       if (!parsed.counts.every((count, index) => count === DEFAULT_LEVEL_COUNTS[index])) {
-        throw new Error('存档使用了不受支持的强度映射。');
+        throw new Error(ui.t('error.unsupportedCounts'));
       }
       if (totalOf(core.computeSummary(parsed.levels, parsed.counts)) > MAX_COMMITS) {
-        throw new Error(`存档超过 ${MAX_COMMITS} 次提交的安全上限。`);
+        throw new Error(ui.t('error.archiveLimit', { count: ui.formatNumber(MAX_COMMITS) }));
       }
       const hasContent = paintedOf(safeSummary()) > 0;
       const unloadForDateChange = Boolean(state.snapshot && parsed.endDate !== state.snapshot.rangeEnd);
@@ -1140,14 +1274,14 @@ async function main() {
         : [];
       if (hasContent || unloadForDateChange || snapshotConflicts.length > 0) {
         const snapshotEffect = unloadForDateChange
-          ? '结束日期不同，因此当前绿墙快照也会卸载。'
+          ? ui.t('archive.importDateUnload')
           : snapshotConflicts.length > 0
-            ? `其中 ${snapshotConflicts.length} 个计划日期已有 GitHub 贡献，将从计划中清除。`
+            ? ui.plural('archive.importConflicts', snapshotConflicts.length)
             : '';
         const accepted = await confirmAction({
-          title: '导入并替换当前画布？',
-          message: `导入会替换当前图案、结束日期和时区。${snapshotEffect}`,
-          confirmLabel: '确认导入',
+          title: ui.t('archive.import.title'),
+          message: ui.t('archive.import.body', { effect: snapshotEffect }),
+          confirmLabel: ui.t('archive.import.confirm'),
         });
         if (!accepted) return;
       }
@@ -1168,9 +1302,9 @@ async function main() {
       state.counts = [...DEFAULT_LEVEL_COUNTS];
       renderDates();
       pushUndo(before);
-      toast('设计已从 JSON 导入。');
+      toast(ui.t('archive.imported'));
     } catch (error) {
-      toast(`导入失败：${friendlyError(error)}`, 'error');
+      toast(ui.t('archive.importFailed', { message: friendlyError(error) }), 'error');
     } finally {
       elements.importFile.value = '';
     }
@@ -1182,7 +1316,8 @@ async function main() {
       new Intl.DateTimeFormat('en', { timeZone }).format();
       const option = document.createElement('option');
       option.value = timeZone;
-      option.textContent = `${timeZone}（当前浏览器）`;
+      option.textContent = ui.t('timezone.browser', { timeZone });
+      option.dataset.browserTimeZone = 'true';
       elements.timezone.prepend(option);
     } catch {
       throw new Error('time zone is invalid');
@@ -1215,7 +1350,25 @@ async function main() {
     area.select();
     const copied = document.execCommand('copy');
     area.remove();
-    if (!copied) throw new Error('浏览器拒绝复制，请在预览中手动选择文本。');
+    if (!copied) throw new Error(ui.t('error.copy'));
+  }
+
+  function renderGeneratedScriptMeta(total = totalOf(safeSummary())) {
+    if (!state.generatedScript) return;
+    const snapshotMeta = state.snapshot
+      ? ui.t('script.meta.snapshot', {
+        account: state.snapshot.account,
+        generatedAt: ui.formatDateTime(state.snapshot.generatedAt),
+        count: ui.formatNumber(state.snapshot.days.filter((day) => day.count > 0).length),
+      })
+      : ui.t('script.meta.unchecked');
+    elements.scriptMeta.textContent = ui.t('script.meta', {
+      format: state.generatedFormat === 'bash' ? 'Bash (.sh)' : 'PowerShell (.ps1)',
+      count: ui.formatNumber(total),
+      date: ui.formatIsoDate(elements.endDate.value),
+      timeZone: elements.timezone.value,
+      snapshot: snapshotMeta,
+    });
   }
 
   async function generate(event) {
@@ -1224,27 +1377,27 @@ async function main() {
     const summary = safeSummary();
     const total = totalOf(summary);
     if (total === 0) {
-      toast('请先在画布上绘制至少一个非未来日期。', 'error');
+      toast(ui.t('generate.empty'), 'error');
       return;
     }
     if (total > MAX_COMMITS) {
-      toast(`设计超过 ${MAX_COMMITS} 次提交的安全上限。`, 'error');
+      toast(ui.t('generate.limit', { count: ui.formatNumber(MAX_COMMITS) }), 'error');
       return;
     }
     if (total >= WARNING_COMMITS) {
       const accepted = await confirmAction({
-        title: `将生成 ${total} 次提交`,
-        message: '这是较多的占位提交。请确认你会使用全新、独立、自己拥有的练习仓库，并在运行前逐行审阅脚本。',
-        confirmLabel: '继续审阅',
+        title: ui.plural('generate.volume.title', total),
+        message: ui.t('generate.volume.body'),
+        confirmLabel: ui.t('generate.volume.confirm'),
         danger: false,
       });
       if (!accepted) return;
     }
     if (!state.snapshot) {
       const accepted = await confirmAction({
-        title: '未检查当前贡献墙',
-        message: '尚未导入当前绿墙快照，脚本可能在已有贡献的日期继续创建提交。仍要生成脚本供审阅吗？',
-        confirmLabel: '仍然生成',
+        title: ui.t('generate.unchecked.title'),
+        message: ui.t('generate.unchecked.body'),
+        confirmLabel: ui.t('generate.unchecked.confirm'),
         danger: false,
       });
       if (!accepted) return;
@@ -1258,20 +1411,20 @@ async function main() {
         : core.generateScript(format, design);
       state.generatedFormat = format;
       elements.scriptOutput.textContent = state.generatedScript;
-      const snapshotMeta = state.snapshot
-        ? ` · 快照 @${state.snapshot.account} · ${state.snapshot.generatedAt} · 避开 ${state.snapshot.days.filter((day) => day.count > 0).length} 个已有绿点`
-        : ' · 未检查当前绿墙';
-      elements.scriptMeta.textContent = `${format === 'bash' ? 'Bash (.sh)' : 'PowerShell (.ps1)'} · ${total} 次提交 · ${elements.endDate.value} · ${elements.timezone.value}${snapshotMeta}`;
+      renderGeneratedScriptMeta(total);
       elements.reviewConfirm.checked = false;
       elements.copyScript.disabled = true;
       elements.downloadScript.disabled = true;
       elements.scriptDialog.showModal();
     } catch (error) {
-      toast(`无法生成脚本：${friendlyError(error)}`, 'error');
+      toast(ui.t('script.generateFailed', { message: friendlyError(error) }), 'error');
     }
   }
 
   function bindEvents() {
+    document.querySelectorAll('[data-locale]').forEach((button) => {
+      button.addEventListener('click', () => applyLocale(button.dataset.locale));
+    });
     document.querySelectorAll('.level-button').forEach((button) => {
       button.addEventListener('click', () => selectLevel(Number(button.dataset.level)));
     });
@@ -1363,19 +1516,19 @@ async function main() {
 
     elements.clear.addEventListener('click', async () => {
       if (paintedOf(safeSummary()) === 0) {
-        toast('画布已经是空的。');
+        toast(ui.t('canvas.alreadyEmpty'));
         return;
       }
       const accepted = await confirmAction({
-        title: '清空整张画布？',
-        message: '所有已绘制格子都会被擦除。你仍可使用“撤销”恢复。',
-        confirmLabel: '清空画布',
+        title: ui.t('canvas.clear.title'),
+        message: ui.t('canvas.clear.body'),
+        confirmLabel: ui.t('canvas.clear.confirm'),
       });
       if (!accepted) return;
       const before = snapshot();
       restoreLevels(Array(cellCount).fill(0));
       pushUndo(before);
-      toast('画布已清空。');
+      toast(ui.t('canvas.cleared'));
     });
 
     const updateCalendarControl = () => {
@@ -1402,12 +1555,12 @@ async function main() {
           return;
         }
         const lossWarning = projection.lostOutsideRange > 0
-          ? `，并永久移除 ${projection.lostOutsideRange} 个离开新 53 周范围的计划日期`
-          : '；当前计划日期都会保留';
+          ? ui.plural('calendar.loss', projection.lostOutsideRange)
+          : ui.t('calendar.keep');
         const accepted = await confirmAction({
-          title: '卸载当前绿墙快照？',
-          message: `快照只对应它记录的日期范围。更改画布结束日期会卸载快照${lossWarning}。取消将恢复原结束日期，快照和计划均不变。`,
-          confirmLabel: '卸载并更改',
+          title: ui.t('calendar.unload.title'),
+          message: ui.t('calendar.unload.body', { effect: lossWarning }),
+          confirmLabel: ui.t('calendar.unload.confirm'),
         });
         if (!accepted) {
           elements.endDate.value = state.renderedEndDate;
@@ -1424,7 +1577,9 @@ async function main() {
         state.undo.length = 0;
         state.redo.length = 0;
         updateHistoryButtons();
-        toast(`结束日期已更改，当前绿墙快照已卸载${projection.lostOutsideRange > 0 ? `，已移除 ${projection.lostOutsideRange} 个范围外计划日期` : ''}。`);
+        toast(ui.t('calendar.changed', {
+          effect: projection.lostOutsideRange > 0 ? ui.plural('calendar.removed', projection.lostOutsideRange) : '',
+        }));
         return;
       }
       updateCalendarControl();
@@ -1434,7 +1589,7 @@ async function main() {
     elements.zoom.addEventListener('click', () => {
       const zoomed = elements.canvasShell.classList.toggle('is-zoomed');
       elements.zoom.setAttribute('aria-pressed', String(zoomed));
-      elements.zoomLabel.textContent = zoomed ? '缩小格子' : '放大格子';
+      elements.zoomLabel.textContent = ui.t(zoomed ? 'view.zoomOut' : 'view.zoomIn');
     });
 
     elements.pan.addEventListener('click', () => {
@@ -1442,8 +1597,8 @@ async function main() {
       state.panMode = !state.panMode;
       elements.canvasShell.classList.toggle('is-panning', state.panMode);
       elements.pan.setAttribute('aria-pressed', String(state.panMode));
-      elements.panLabel.textContent = state.panMode ? '返回绘制' : '平移画布';
-      toast(state.panMode ? '已开启平移：在格子上左右滑动画布。' : '已返回绘制模式。');
+      elements.panLabel.textContent = ui.t(state.panMode ? 'view.draw' : 'view.pan');
+      toast(ui.t(state.panMode ? 'view.panOn' : 'view.panOff'));
     });
 
     elements.exportJson.addEventListener('click', exportJson);
@@ -1457,7 +1612,7 @@ async function main() {
       try {
         await refreshLiveContributions();
       } catch (error) {
-        setLiveStatus(`无法刷新贡献墙：${friendlyError(error)}`, 'error');
+        setLiveStatusKey('live.refreshFailed', () => ({ message: friendlyError(error) }), 'error');
       }
     });
     elements.setupRepository.addEventListener('click', setupManagedRepository);
@@ -1501,7 +1656,7 @@ async function main() {
     elements.copyScript.addEventListener('click', async () => {
       try {
         await copyText(state.generatedScript);
-        toast('脚本已复制到剪贴板。');
+        toast(ui.t('script.copied'));
       } catch (error) {
         toast(friendlyError(error), 'error');
       }
@@ -1510,7 +1665,7 @@ async function main() {
       const extension = state.generatedFormat === 'bash' ? 'sh' : 'ps1';
       const mime = state.generatedFormat === 'bash' ? 'text/x-shellscript' : 'text/plain';
       downloadText(state.generatedScript, `commit-canvas.${extension}`, `${mime};charset=utf-8`);
-      toast('脚本已下载；运行前请再次逐行审阅。');
+      toast(ui.t('script.downloaded'));
     });
   }
 

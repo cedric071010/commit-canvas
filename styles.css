@@ -58,6 +58,7 @@ code, kbd, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", mon
 
 .site-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
@@ -69,10 +70,13 @@ code, kbd, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", mon
 
 .brand {
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   gap: 11px;
   text-decoration: none;
 }
+.brand > span:last-child { min-width: 0; }
 .brand-mark {
   display: grid;
   width: 42px;
@@ -87,6 +91,11 @@ code, kbd, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", mon
 .brand strong { display: block; letter-spacing: .15em; font-size: .82rem; }
 .brand small { display: block; margin-top: 1px; color: var(--muted); font-size: .72rem; }
 .header-note { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .78rem; }
+.header-tools { display: flex; flex: 1 1 320px; flex-wrap: wrap; min-width: 0; max-width: 100%; align-items: center; justify-content: flex-end; gap: 16px; }
+.language-switcher { display: inline-flex; flex: 0 1 auto; flex-wrap: wrap; min-width: 0; max-width: 100%; padding: 3px; border: 1px solid var(--line); border-radius: 99px; background: var(--sheet); }
+.language-switcher button { min-height: 30px; padding: 3px 10px; color: var(--muted); background: transparent; border: 0; border-radius: 99px; cursor: pointer; font-size: .72rem; font-weight: 750; }
+.language-switcher button[aria-pressed="true"] { color: white; background: var(--forest); }
+.language-switcher button:focus-visible { outline: 3px solid color-mix(in srgb, var(--rust) 72%, white); outline-offset: 2px; }
 .privacy-dot { width: 8px; height: 8px; background: var(--level-2); border: 2px solid var(--sheet); border-radius: 50%; box-shadow: 0 0 0 1px var(--level-3); }
 
 main, footer { max-width: 1280px; margin: 0 auto; }
@@ -123,7 +132,7 @@ h1 em { color: var(--forest); font-weight: 500; }
   box-shadow: 5px 8px 0 rgb(68 62 37 / 8%);
   transform: rotate(1.2deg);
 }
-.ethics-note::after { content: "EDUCATION ONLY"; position: absolute; right: 15px; bottom: 8px; color: rgb(101 74 36 / 25%); font: 700 .58rem monospace; letter-spacing: .13em; }
+.ethics-note::after { content: attr(data-stamp); position: absolute; right: 15px; bottom: 8px; color: rgb(101 74 36 / 25%); font: 700 .58rem monospace; letter-spacing: .13em; }
 .ethics-note strong { font-family: Georgia, "Noto Serif SC", serif; font-size: 1.1rem; }
 .ethics-note p { margin: 8px 0 5px; color: #625b46; font-size: .87rem; }
 .note-pin { position: absolute; top: -8px; left: 50%; width: 15px; height: 15px; background: var(--rust); border-radius: 50%; box-shadow: 1px 2px 2px rgb(0 0 0 / 20%); }
@@ -463,6 +472,9 @@ dialog::backdrop { background: rgb(19 34 26 / 72%); backdrop-filter: blur(3px); 
 }
 
 @media (max-width: 430px) {
+  .site-header { align-items: flex-start; gap: 12px; }
+  .header-tools { flex-basis: 100%; justify-content: flex-start; }
+  .language-switcher { border-radius: 14px; }
   .history-actions .button { flex: 1; padding-inline: 8px; }
   .history-actions kbd { display: none; }
   .level-options { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
@@ -506,6 +518,7 @@ dialog::backdrop { background: rgb(19 34 26 / 72%); backdrop-filter: blur(3px); 
   .button-primary { color: #102219; background: #8fc992; border-color: #8fc992; }
   .button-primary:hover:not(:disabled) { color: #102219; background: #a4d7a6; }
   .button-secondary { color: white; }
+  .language-switcher button[aria-pressed="true"] { color: #102219; background: #a4d7a6; }
   .button-danger, .dialog-symbol { color: #102219; }
   .grid-cell:disabled { background: repeating-linear-gradient(135deg, #39453e 0 2px, #2d3832 2px 4px); }
   .grid-cell.has-existing { border-color: #a7d3a6; background-image: repeating-linear-gradient(135deg, transparent 0 2px, rgb(255 255 255 / 22%) 2px 4px); }
@@ -527,6 +540,7 @@ dialog::backdrop { background: rgb(19 34 26 / 72%); backdrop-filter: blur(3px); 
   .grid-cell.has-existing { border: 2px dashed LinkText; }
   .grid-cell.has-plan::after { border: 2px solid Highlight; }
   .level-button.is-selected,
+  .language-switcher button[aria-pressed="true"],
   .shell-picker input:checked + span,
   .mode-badge {
     color: HighlightText;

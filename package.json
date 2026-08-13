@@ -10,6 +10,6 @@
     "live": "node scripts/serve.mjs --live",
     "snapshot": "node scripts/github-snapshot.mjs",
     "test": "node --test",
-    "check": "node --check scripts/serve.mjs && node --check scripts/github-service.mjs && node --check scripts/github-snapshot.mjs && node --check tests/ui.test.mjs && node --test"
+    "check": "node --check src/i18n.js && node --check src/app.js && node --check scripts/serve.mjs && node --check scripts/github-service.mjs && node --check scripts/github-snapshot.mjs && node --check tests/ui.test.mjs && node --test"
   }
 }

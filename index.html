@@ -1,84 +1,90 @@
 <!doctype html>
-<html lang="zh-Hans">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Commit Canvas 是一个本地优先的 GitHub 贡献图绘画工具，可离线设计，或通过 localhost 辅助程序安全提交。">
+  <meta name="description" content="Commit Canvas is a local-first GitHub contribution graph drawing tool for offline design and secure submission through a localhost companion.">
   <meta name="theme-color" content="#f3f0e6">
   <meta name="color-scheme" content="light dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>Commit Canvas · 提交画布</title>
+  <title>Commit Canvas · Draw on your contribution graph</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d3226'/%3E%3Cpath d='M18 42c15 1 25-7 29-25-18 3-27 11-29 25Z' fill='%238ccf8b'/%3E%3Cpath d='M17 47c7-12 15-19 27-26' fill='none' stroke='%23f7f2df' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <a class="skip-link" href="#canvas-heading">跳到画布</a>
+  <a class="skip-link" href="#canvas-heading" data-i18n="skip.canvas">Skip to canvas</a>
   <header class="site-header">
-    <a class="brand" href="#top" aria-label="Commit Canvas 首页">
+    <a class="brand" href="#top" aria-label="Commit Canvas home" data-i18n-aria-label="brand.home">
       <span class="brand-mark" aria-hidden="true">⌁</span>
       <span>
         <strong>COMMIT CANVAS</strong>
-        <small>提交画布 · 本地优先教育工具</small>
+        <small data-i18n="brand.subtitle">Contribution drawing · local-first education tool</small>
       </span>
     </a>
-    <div class="header-note">
-      <span class="privacy-dot" aria-hidden="true"></span>
-      静态模式离线 · localhost 辅助程序可安全连接 GitHub
+    <div class="header-tools">
+      <div class="header-note">
+        <span class="privacy-dot" aria-hidden="true"></span>
+        <span data-i18n="header.mode">Offline in static mode · securely connect GitHub through the localhost companion</span>
+      </div>
+      <fieldset class="language-switcher" aria-label="Language" data-i18n-aria-label="language.label">
+        <button type="button" data-locale="en" aria-pressed="true" lang="en">English</button>
+        <button type="button" data-locale="zh-Hans" aria-pressed="false" lang="zh-Hans">简体中文</button>
+      </fieldset>
     </div>
   </header>
 
   <main id="top">
     <section class="intro" aria-labelledby="page-title">
       <div>
-        <p class="eyebrow">BOTANICAL GIT NOTEBOOK / 01</p>
-        <h1 id="page-title">把想法种进<br><em>贡献日历</em></h1>
-        <p class="lede">在 53 × 7 的格纸上离线设计图案。静态模式只导入、导出本地文件；由 localhost 辅助程序托管时，可借助已认证的 <code>gh</code> 连接 GitHub，Token 不会交给网页。</p>
+        <p class="eyebrow" data-i18n="section.intro">BOTANICAL GIT NOTEBOOK / 01</p>
+        <h1 id="page-title"><span data-i18n="intro.title.before">Plant an idea in your</span><br><em data-i18n="intro.title.emphasis">contribution calendar</em></h1>
+        <p class="lede"><span data-i18n="intro.lede.before">Design a pattern offline on a 53 × 7 grid. Static mode only imports and exports local files. When hosted by the localhost companion, Commit Canvas connects to GitHub through your authenticated </span><code>gh</code><span data-i18n="intro.lede.after">; your token never enters the page.</span></p>
       </div>
-      <aside class="ethics-note" aria-label="教育用途说明">
+      <aside class="ethics-note" aria-label="Educational-use notice" data-i18n-aria-label="ethics.label" data-stamp="EDUCATION ONLY" data-i18n-data-stamp="ethics.stamp">
         <span class="note-pin" aria-hidden="true"></span>
-        <strong>教育实验，不是履历证明</strong>
-        <p>装饰性提交不等于工作成果。请只在你拥有的全新独立练习仓库中使用，并在运行前审阅脚本。</p>
+        <strong data-i18n="ethics.title">An educational experiment, not proof of work</strong>
+        <p data-i18n="ethics.body">Decorative commits are not work output. Use this only in a new, separate practice repository that you own, and review every action before running it.</p>
       </aside>
     </section>
 
     <section class="workspace" aria-labelledby="canvas-heading">
       <div class="workspace-topline">
         <div>
-          <p class="section-kicker">DRAWING DESK</p>
-          <h2 id="canvas-heading">画布</h2>
+          <p class="section-kicker" data-i18n="section.canvas">DRAWING DESK</p>
+          <h2 id="canvas-heading" data-i18n="canvas.heading">Canvas</h2>
         </div>
-        <div class="history-actions" aria-label="编辑历史">
-          <button class="button button-quiet" id="undo-button" type="button" disabled><span aria-hidden="true">↶</span> 撤销 <kbd>Ctrl Z</kbd></button>
-          <button class="button button-quiet" id="redo-button" type="button" disabled><span aria-hidden="true">↷</span> 重做</button>
-          <button class="button button-danger-quiet" id="clear-button" type="button">清空</button>
+        <div class="history-actions" aria-label="Edit history" data-i18n-aria-label="history.label">
+          <button class="button button-quiet" id="undo-button" type="button" disabled><span aria-hidden="true">↶</span> <span data-i18n="history.undo">Undo</span> <kbd>Ctrl Z</kbd></button>
+          <button class="button button-quiet" id="redo-button" type="button" disabled><span aria-hidden="true">↷</span> <span data-i18n="history.redo">Redo</span></button>
+          <button class="button button-danger-quiet" id="clear-button" type="button" data-i18n="history.clear">Clear</button>
         </div>
       </div>
 
       <div class="control-strip">
         <fieldset class="level-picker">
-          <legend>画笔强度</legend>
+          <legend data-i18n="brush.legend">Brush intensity</legend>
           <div class="level-options" id="level-options">
-            <button class="level-button is-selected" type="button" data-level="0" aria-pressed="true"><span class="swatch level-0"></span><span>橡皮</span><small>0</small></button>
-            <button class="level-button" type="button" data-level="1" aria-pressed="false"><span class="swatch level-1"></span><span>幼芽</span><small>1</small></button>
-            <button class="level-button" type="button" data-level="2" aria-pressed="false"><span class="swatch level-2"></span><span>新叶</span><small>3</small></button>
-            <button class="level-button" type="button" data-level="3" aria-pressed="false"><span class="swatch level-3"></span><span>繁茂</span><small>6</small></button>
-            <button class="level-button" type="button" data-level="4" aria-pressed="false"><span class="swatch level-4"></span><span>深林</span><small>10</small></button>
+            <button class="level-button is-selected" type="button" data-level="0" aria-pressed="true"><span class="swatch level-0"></span><span data-i18n="brush.erase">Eraser</span><small>0</small></button>
+            <button class="level-button" type="button" data-level="1" aria-pressed="false"><span class="swatch level-1"></span><span data-i18n="brush.level1">Sprout</span><small>1</small></button>
+            <button class="level-button" type="button" data-level="2" aria-pressed="false"><span class="swatch level-2"></span><span data-i18n="brush.level2">Leaf</span><small>3</small></button>
+            <button class="level-button" type="button" data-level="3" aria-pressed="false"><span class="swatch level-3"></span><span data-i18n="brush.level3">Canopy</span><small>6</small></button>
+            <button class="level-button" type="button" data-level="4" aria-pressed="false"><span class="swatch level-4"></span><span data-i18n="brush.level4">Forest</span><small>10</small></button>
           </div>
         </fieldset>
 
         <div class="date-control field-control">
-          <label for="end-date">画布结束日期</label>
+          <label for="end-date" data-i18n="date.end.label">Canvas end date</label>
           <input id="end-date" type="date">
-          <small>未来日期会自动锁定</small>
+          <small data-i18n="date.end.help">Future dates are locked automatically</small>
         </div>
 
         <div class="view-actions">
           <div class="view-buttons">
-            <button class="button button-quiet" id="zoom-button" type="button" aria-pressed="false"><span aria-hidden="true">⌕</span> <span id="zoom-label">放大格子</span></button>
-            <button class="button button-quiet pan-button" id="pan-button" type="button" aria-pressed="false"><span aria-hidden="true">↔</span> <span id="pan-label">平移画布</span></button>
+            <button class="button button-quiet" id="zoom-button" type="button" aria-pressed="false"><span aria-hidden="true">⌕</span> <span id="zoom-label" data-i18n="view.zoomIn">Enlarge cells</span></button>
+            <button class="button button-quiet pan-button" id="pan-button" type="button" aria-pressed="false"><span aria-hidden="true">↔</span> <span id="pan-label" data-i18n="view.pan">Pan canvas</span></button>
           </div>
-          <span class="shortcut-tip"><kbd>0–4</kbd> 选强度 · <kbd>Space</kbd> 绘制</span>
-          <span class="touch-tip">触屏默认绘制；切换“平移画布”后可左右滑动，缩放按钮仍可使用。</span>
+          <span class="shortcut-tip"><kbd>0–4</kbd> <span data-i18n="view.shortcut.before">Select intensity ·</span> <kbd>Space</kbd> <span data-i18n="view.shortcut.after">Draw</span></span>
+          <span class="touch-tip" data-i18n="view.touch">Touch draws by default. Switch to “Pan canvas” to swipe horizontally; zoom remains available.</span>
         </div>
       </div>
 
@@ -87,177 +93,177 @@
           <div class="calendar-stage">
             <div class="month-labels" id="month-labels" aria-hidden="true"></div>
             <div class="weekday-labels" aria-hidden="true">
-              <span>一</span><span>三</span><span>五</span>
+              <span data-i18n="weekday.mon.short">Mon</span><span data-i18n="weekday.wed.short">Wed</span><span data-i18n="weekday.fri.short">Fri</span>
             </div>
-            <div class="commit-grid" id="commit-grid" role="grid" aria-label="53 周、每天一格的提交画布" aria-rowcount="7" aria-colcount="53"></div>
+            <div class="commit-grid" id="commit-grid" role="grid" aria-label="53-week commit canvas with one cell per day" data-i18n-aria-label="grid.label" aria-describedby="grid-help" aria-rowcount="7" aria-colcount="53"></div>
           </div>
         </div>
-        <p class="grid-help" id="grid-help">拖动或触摸连续绘制。键盘用户可用方向键移动，Home / End、Page Up / Page Down 跳转。</p>
+        <p class="grid-help" id="grid-help" data-i18n="grid.help">Drag or touch to draw continuously. Keyboard users can move with the arrow keys and jump with Home / End or Page Up / Page Down.</p>
       </div>
 
-      <div class="summary-bar" aria-label="设计统计">
-        <div><span>计划提交</span><strong id="total-commits">0</strong></div>
-        <div><span>已绘制日期</span><strong id="painted-days">0</strong></div>
-        <div><span>日期范围</span><strong id="date-range">—</strong></div>
-        <div class="summary-status" id="limit-status"><span class="status-light"></span><span>可以继续创作</span></div>
+      <div class="summary-bar" aria-label="Design statistics" data-i18n-aria-label="summary.label">
+        <div><span data-i18n="summary.commits">Planned commits</span><strong id="total-commits">0</strong></div>
+        <div><span data-i18n="summary.days">Painted days</span><strong id="painted-days">0</strong></div>
+        <div><span data-i18n="summary.range">Date range</span><strong id="date-range">—</strong></div>
+        <div class="summary-status" id="limit-status"><span class="status-light"></span><span data-i18n="summary.ready.initial">Ready to create</span></div>
       </div>
     </section>
 
     <section class="snapshot-panel" aria-labelledby="snapshot-heading">
       <div class="snapshot-copy">
-        <p class="section-kicker">EXISTING CONTRIBUTIONS / 02</p>
-        <h2 id="snapshot-heading">当前绿墙快照</h2>
-        <p>静态模式可导入严格 JSON 快照作为只读底图；localhost 辅助程序模式可通过已认证的 <code>gh</code> 刷新实时贡献。两种模式都不要求把 GitHub Token 交给网页。</p>
-        <p class="snapshot-notice" id="snapshot-notice">尚未导入快照。当前画布无法判断哪些日期已经有贡献。</p>
+        <p class="section-kicker" data-i18n="section.snapshot">EXISTING CONTRIBUTIONS / 02</p>
+        <h2 id="snapshot-heading" data-i18n="snapshot.heading">Current contribution snapshot</h2>
+        <p><span data-i18n="snapshot.intro.before">In static mode, import a strict JSON snapshot as a read-only background. The localhost companion can refresh live contributions through your authenticated </span><code>gh</code><span data-i18n="snapshot.intro.after">. Neither mode asks you to give a GitHub token to the page.</span></p>
+        <p class="snapshot-notice" id="snapshot-notice" data-i18n="snapshot.none.notice">No snapshot is loaded. The canvas cannot tell which dates already have contributions.</p>
       </div>
       <div class="snapshot-card">
         <div class="live-connection-row">
-          <span class="mode-badge" id="live-mode-badge">静态离线模式</span>
-          <p id="connect-status" role="status" aria-live="polite">未连接 localhost 辅助程序；可继续使用手动快照。</p>
-          <button class="button button-secondary" id="refresh-contributions-button" type="button" disabled>刷新实时贡献</button>
+          <span class="mode-badge" id="live-mode-badge" data-i18n="snapshot.mode.static">Static offline mode</span>
+          <p id="connect-status" role="status" aria-live="polite" data-i18n="snapshot.connect.initial">The localhost companion is not connected; manual snapshots remain available.</p>
+          <button class="button button-secondary" id="refresh-contributions-button" type="button" disabled data-i18n="snapshot.refresh">Refresh live contributions</button>
         </div>
         <dl class="snapshot-details">
-          <div><dt>账户</dt><dd id="snapshot-account">—</dd></div>
-          <div><dt>生成时间</dt><dd id="snapshot-generated-at">—</dd></div>
-          <div><dt>覆盖范围</dt><dd id="snapshot-range">—</dd></div>
-          <div><dt>已有绿点</dt><dd id="snapshot-existing-status">未检查</dd></div>
+          <div><dt data-i18n="snapshot.account">Account</dt><dd id="snapshot-account">—</dd></div>
+          <div><dt data-i18n="snapshot.generated">Generated</dt><dd id="snapshot-generated-at">—</dd></div>
+          <div><dt data-i18n="snapshot.coverage">Coverage</dt><dd id="snapshot-range">—</dd></div>
+          <div><dt data-i18n="snapshot.existing">Existing green days</dt><dd id="snapshot-existing-status" data-i18n="snapshot.unchecked">Not checked</dd></div>
         </dl>
-        <div class="snapshot-legend" aria-label="画布图例">
-          <span><i class="legend-cell legend-existing" aria-hidden="true"></i> GitHub 已有（纹理边框）</span>
-          <span><i class="legend-cell legend-planned" aria-hidden="true"></i> 计划新增（内层实心）</span>
+        <div class="snapshot-legend" aria-label="Canvas legend" data-i18n-aria-label="snapshot.legend.label">
+          <span><i class="legend-cell legend-existing" aria-hidden="true"></i> <span data-i18n="snapshot.legend.existing">Already on GitHub (textured border)</span></span>
+          <span><i class="legend-cell legend-planned" aria-hidden="true"></i> <span data-i18n="snapshot.legend.planned">Planned addition (solid center)</span></span>
         </div>
-        <p class="snapshot-stale-note">手动快照不是实时数据；GitHub 状态变化后请重新生成并导入。它始终作为实时连接不可用时的离线后备。</p>
+        <p class="snapshot-stale-note" data-i18n="snapshot.stale">A manual snapshot is not live data. Generate and import it again after GitHub changes. It remains an offline fallback whenever the live connection is unavailable.</p>
         <div class="snapshot-actions">
-          <button class="button button-quiet" id="import-snapshot-button" type="button">手动导入快照 JSON <span aria-hidden="true">↑</span></button>
-          <button class="button button-quiet" id="unload-snapshot-button" type="button" disabled>卸载快照</button>
-          <input class="visually-hidden" id="snapshot-file" type="file" accept="application/json,.json" tabindex="-1" aria-label="选择要导入的贡献墙快照 JSON 文件">
+          <button class="button button-quiet" id="import-snapshot-button" type="button"><span data-i18n="snapshot.import">Import snapshot JSON manually</span> <span aria-hidden="true">↑</span></button>
+          <button class="button button-quiet" id="unload-snapshot-button" type="button" disabled data-i18n="snapshot.unload">Unload snapshot</button>
+          <input class="visually-hidden" id="snapshot-file" type="file" accept="application/json,.json" tabindex="-1" aria-label="Choose a contribution snapshot JSON file to import" data-i18n-aria-label="snapshot.file.label">
         </div>
-        <p class="microcopy">最大导入文件：1 MiB · 快照不会写入设计 JSON</p>
+        <p class="microcopy" data-i18n="snapshot.file.help">Maximum import: 1 MiB · snapshots are never written into design JSON</p>
       </div>
     </section>
 
-    <section class="tool-grid" aria-label="设计工具">
+    <section class="tool-grid" aria-label="Design tools" data-i18n-aria-label="tools.label">
       <article class="panel templates-panel">
         <div class="panel-heading">
-          <div><p class="section-kicker">SEED LIBRARY</p><h2>图案模板</h2></div>
+          <div><p class="section-kicker" data-i18n="section.templates">SEED LIBRARY</p><h2 data-i18n="templates.heading">Pattern templates</h2></div>
           <span class="panel-number">03</span>
         </div>
-        <p>模板会替换当前画布；应用前仍会让你确认。</p>
+        <p data-i18n="templates.help">A template replaces the current canvas after you confirm.</p>
         <div class="template-grid">
-          <button class="template-card" type="button" data-template="heart"><span aria-hidden="true">♥</span><strong>爱心</strong><small>HEART</small></button>
-          <button class="template-card" type="button" data-template="hello"><span class="template-word" aria-hidden="true">HI</span><strong>HELLO</strong><small>TYPE</small></button>
-          <button class="template-card" type="button" data-template="wave"><span aria-hidden="true">≋</span><strong>波浪</strong><small>WAVE</small></button>
-          <button class="template-card" type="button" data-template="stars"><span aria-hidden="true">✦</span><strong>星群</strong><small>STARS</small></button>
+          <button class="template-card" type="button" data-template="heart"><span aria-hidden="true">♥</span><strong data-i18n="templates.heart">Heart</strong><small data-i18n="templates.heart.tag">HEART</small></button>
+          <button class="template-card" type="button" data-template="hello"><span class="template-word" aria-hidden="true">HI</span><strong data-i18n="templates.hello">HELLO</strong><small data-i18n="templates.hello.tag">TYPE</small></button>
+          <button class="template-card" type="button" data-template="wave"><span aria-hidden="true">≋</span><strong data-i18n="templates.wave">Wave</strong><small data-i18n="templates.wave.tag">WAVE</small></button>
+          <button class="template-card" type="button" data-template="stars"><span aria-hidden="true">✦</span><strong data-i18n="templates.stars">Stars</strong><small data-i18n="templates.stars.tag">STARS</small></button>
         </div>
       </article>
 
       <article class="panel data-panel">
         <div class="panel-heading">
-          <div><p class="section-kicker">FIELD NOTES</p><h2>设计存档</h2></div>
+          <div><p class="section-kicker" data-i18n="section.archive">FIELD NOTES</p><h2 data-i18n="archive.heading">Design archive</h2></div>
           <span class="panel-number">04</span>
         </div>
-        <p>JSON 只包含画布、日期和时区设置，方便继续编辑。不会上传任何内容。</p>
+        <p data-i18n="archive.help">Design JSON contains only the canvas, date, and time-zone settings for later editing. Nothing is uploaded.</p>
         <div class="stack-actions">
-          <button class="button button-secondary" id="export-json-button" type="button">导出 JSON <span aria-hidden="true">↓</span></button>
-          <button class="button button-quiet" id="import-json-button" type="button">导入 JSON <span aria-hidden="true">↑</span></button>
-          <input class="visually-hidden" id="import-file" type="file" accept="application/json,.json" tabindex="-1" aria-label="选择要导入的设计 JSON 文件">
+          <button class="button button-secondary" id="export-json-button" type="button"><span data-i18n="archive.export">Export JSON</span> <span aria-hidden="true">↓</span></button>
+          <button class="button button-quiet" id="import-json-button" type="button"><span data-i18n="archive.import">Import JSON</span> <span aria-hidden="true">↑</span></button>
+          <input class="visually-hidden" id="import-file" type="file" accept="application/json,.json" tabindex="-1" aria-label="Choose a design JSON file to import" data-i18n-aria-label="archive.file.label">
         </div>
-        <p class="microcopy">最大导入文件：1 MiB</p>
+        <p class="microcopy" data-i18n="archive.file.help">Maximum import: 1 MiB</p>
       </article>
     </section>
 
     <section class="live-section" id="live-section" aria-labelledby="live-heading">
       <div class="live-copy">
-        <p class="section-kicker">MANAGED GITHUB SUBMISSION / 05</p>
-        <h2 id="live-heading">通过本地辅助程序提交</h2>
-        <p>仅当页面由 Commit Canvas localhost 辅助程序托管时可用。辅助程序使用本机已认证的 <code>gh</code> 创建或连接一个专用练习仓库；GitHub 凭据不会进入页面。</p>
+        <p class="section-kicker" data-i18n="section.live">MANAGED GITHUB SUBMISSION / 05</p>
+        <h2 id="live-heading" data-i18n="live.heading">Submit through the local companion</h2>
+        <p><span data-i18n="live.intro.before">Available only when this page is hosted by the Commit Canvas localhost companion. It uses your authenticated </span><code>gh</code><span data-i18n="live.intro.after"> to create or connect a dedicated practice repository; GitHub credentials never enter the page.</span></p>
         <div class="live-warning">
-          <strong>这是真实的远程写入</strong>
-          <p>提交会写入所选 GitHub 仓库的默认分支。页面内没有撤销远程提交的功能。</p>
+          <strong data-i18n="live.warning.title">This performs a real remote write</strong>
+          <p data-i18n="live.warning.body">Commits are written to the default branch of the selected GitHub repository. Commit Canvas cannot undo remote commits.</p>
         </div>
       </div>
 
       <div class="live-console">
-        <dl class="live-facts" aria-label="实时连接信息">
-          <div><dt>已认证账户</dt><dd id="live-account">尚未连接</dd></div>
-          <div><dt>托管仓库</dt><dd id="live-repository">尚未设置</dd></div>
+        <dl class="live-facts" aria-label="Live connection information" data-i18n-aria-label="live.facts.label">
+          <div><dt data-i18n="live.account">Authenticated account</dt><dd id="live-account" data-i18n="live.notConnected">Not connected</dd></div>
+          <div><dt data-i18n="live.repository">Managed repository</dt><dd id="live-repository" data-i18n="live.notConfigured">Not configured</dd></div>
         </dl>
 
         <div class="managed-repo-controls">
           <div class="field-control">
-            <label for="managed-repo-name">专用仓库名称</label>
+            <label for="managed-repo-name" data-i18n="repo.name.label">Dedicated repository name</label>
             <input id="managed-repo-name" name="managed-repo-name" type="text" value="commit-canvas-art" autocomplete="off" spellcheck="false" aria-describedby="managed-repo-help">
-            <small id="managed-repo-help">只允许连接或创建由此工具管理的专用练习仓库。</small>
+            <small id="managed-repo-help" data-i18n="repo.name.help">Only dedicated practice repositories managed by this tool can be created or connected.</small>
           </div>
           <div class="field-control">
-            <label for="managed-repo-visibility">仓库可见性</label>
+            <label for="managed-repo-visibility" data-i18n="repo.visibility.label">Repository visibility</label>
             <select id="managed-repo-visibility" name="managed-repo-visibility">
-              <option value="private" selected>私有</option>
-              <option value="public">公开</option>
+              <option value="private" selected data-i18n="repo.visibility.private">Private</option>
+              <option value="public" data-i18n="repo.visibility.public">Public</option>
             </select>
-            <small>创建后仍可在 GitHub 中更改。</small>
+            <small data-i18n="repo.visibility.help">You can change this later on GitHub.</small>
           </div>
-          <button class="button button-secondary setup-repository-button" id="setup-repository-button" type="button">创建或连接仓库</button>
+          <button class="button button-secondary setup-repository-button" id="setup-repository-button" type="button" data-i18n="repo.setup">Create or connect repository</button>
         </div>
 
         <div class="live-plan" aria-labelledby="live-plan-heading">
-          <h3 id="live-plan-heading">提交计划</h3>
-          <p id="live-plan-summary">先连接辅助程序并设置专用仓库；画布计划会在提交前再次显示供你核对。</p>
+          <h3 id="live-plan-heading" data-i18n="live.plan.heading">Submission plan</h3>
+          <p id="live-plan-summary" data-i18n="live.plan.initial">Connect the companion and set up a dedicated repository first. The canvas plan will be shown again for review before submission.</p>
         </div>
-        <button class="button button-primary live-submit-button" id="submit-live-button" type="button" disabled>审阅并提交到 GitHub <span aria-hidden="true">→</span></button>
-        <button class="button button-secondary" id="resume-submission-button" type="button" hidden>继续查询已接受的任务</button>
-        <button class="button button-quiet" id="dismiss-submission-button" type="button" hidden>核对 GitHub 后放弃本地记录</button>
-        <p class="live-submit-status" id="live-submit-status" role="status" aria-live="polite">实时提交尚未就绪。</p>
-        <progress id="live-progress" max="100" value="0" aria-label="GitHub 提交进度">0%</progress>
+        <button class="button button-primary live-submit-button" id="submit-live-button" type="button" disabled><span data-i18n="live.submit">Review and submit to GitHub</span> <span aria-hidden="true">→</span></button>
+        <button class="button button-secondary" id="resume-submission-button" type="button" hidden data-i18n="live.resume">Continue checking accepted task</button>
+        <button class="button button-quiet" id="dismiss-submission-button" type="button" hidden data-i18n="live.dismiss">Discard local record after checking GitHub</button>
+        <p class="live-submit-status" id="live-submit-status" role="status" aria-live="polite">Live submission is not ready.</p>
+        <progress id="live-progress" max="100" value="0" aria-label="GitHub submission progress" data-i18n-aria-label="live.progress.label">0%</progress>
       </div>
     </section>
 
     <section class="export-section" aria-labelledby="export-heading">
       <div class="export-copy">
-        <p class="section-kicker">ADVANCED OFFLINE FALLBACK / 06</p>
-        <h2 id="export-heading">高级离线后备：本地脚本</h2>
-        <p>不使用 localhost 辅助程序时，可导出并逐行审阅脚本。脚本只在当前目录创建占位提交，不含网络请求、Token、仓库初始化或 <code>git push</code>。请先创建并克隆一个你拥有的全新独立练习仓库。</p>
+        <p class="section-kicker" data-i18n="section.export">ADVANCED OFFLINE FALLBACK / 06</p>
+        <h2 id="export-heading" data-i18n="export.heading">Advanced offline fallback: local script</h2>
+        <p><span data-i18n="export.intro.before">Without the localhost companion, export a script and review it line by line. It only creates placeholder commits in the current directory and contains no network request, token, repository initialization, or </span><code>git push</code><span data-i18n="export.intro.after">. First create and clone a new, separate practice repository that you own.</span></p>
         <ul class="checklist">
-          <li>脚本会在非 Git 仓库或工作区不干净时中止</li>
-          <li>脚本文件放在仓库外，终端当前目录切换到练习仓库</li>
-          <li>邮箱必须已关联到你的 GitHub 账户</li>
-          <li>运行后先检查 <code>git log --format=fuller</code></li>
+          <li data-i18n="export.check.repo">The script stops outside a Git repository or when the working tree is dirty</li>
+          <li data-i18n="export.check.location">Keep the script outside the repository and run it with the practice repository as the terminal’s current directory</li>
+          <li data-i18n="export.check.email">The email must be associated with your GitHub account</li>
+          <li><span data-i18n="export.check.log.before">After running, inspect </span><code>git log --format=fuller</code></li>
         </ul>
       </div>
       <form class="export-form" id="export-form">
         <div class="field-control">
-          <label for="email">提交邮箱</label>
-          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
-          <small>可使用 GitHub 提供的 noreply 邮箱</small>
+          <label for="email" data-i18n="export.email.label">Commit email</label>
+          <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" data-i18n-placeholder="export.email.placeholder" required>
+          <small data-i18n="export.email.help">You may use a GitHub-provided noreply address</small>
         </div>
         <div class="field-control">
-          <label for="timezone">时间戳时区</label>
+          <label for="timezone" data-i18n="export.timezone.label">Timestamp time zone</label>
           <select id="timezone" name="timezone" required></select>
-          <small>导出前请核对日期与时区</small>
+          <small data-i18n="export.timezone.help">Verify the dates and time zone before exporting</small>
         </div>
         <fieldset class="shell-picker">
-          <legend>脚本格式</legend>
+          <legend data-i18n="export.shell.legend">Script format</legend>
           <label><input type="radio" name="shell" value="bash" checked><span><strong>Bash</strong><small>macOS · Linux · Git Bash</small></span></label>
           <label><input type="radio" name="shell" value="powershell"><span><strong>PowerShell</strong><small>Windows PowerShell 5.1+</small></span></label>
         </fieldset>
-        <button class="button button-primary" id="generate-button" type="submit">生成并审阅脚本 <span aria-hidden="true">→</span></button>
+        <button class="button button-primary" id="generate-button" type="submit"><span data-i18n="export.generate">Generate and review script</span> <span aria-hidden="true">→</span></button>
       </form>
     </section>
   </main>
 
   <footer>
-    <p><strong>Commit Canvas</strong> · 本地优先的开源教育工具</p>
-    <p>MIT License · 无跟踪 · 静态模式离线 · 实时模式凭据由本机 <code>gh</code> 保管</p>
+    <p><strong>Commit Canvas</strong> · <span data-i18n="footer.primary">local-first open-source education tool</span></p>
+    <p><span data-i18n="footer.secondary.before">MIT License · no tracking · static mode stays offline · live credentials remain in local </span><code>gh</code></p>
   </footer>
 
   <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <form method="dialog" class="dialog-card">
       <div class="dialog-symbol" aria-hidden="true">?</div>
-      <h2 id="confirm-title">确认操作</h2>
+      <h2 id="confirm-title" data-i18n="dialog.confirm.title">Confirm action</h2>
       <p id="confirm-message"></p>
       <div class="dialog-actions">
-        <button class="button button-quiet" value="cancel">取消</button>
-        <button class="button button-danger" id="confirm-action" value="confirm">确认</button>
+        <button class="button button-quiet" value="cancel" data-i18n="dialog.cancel">Cancel</button>
+        <button class="button button-danger" id="confirm-action" value="confirm" data-i18n="dialog.confirm">Confirm</button>
       </div>
     </form>
   </dialog>
@@ -265,32 +271,32 @@
   <dialog class="live-dialog" id="live-dialog" aria-labelledby="live-dialog-title" aria-describedby="live-dialog-warning">
     <form method="dialog" class="dialog-card live-dialog-card">
       <div class="script-dialog-head">
-        <div><p class="section-kicker">FINAL REMOTE REVIEW</p><h2 id="live-dialog-title">确认写入 GitHub</h2></div>
-        <button class="icon-button" id="close-live-dialog-button" type="submit" value="cancel" aria-label="关闭 GitHub 提交审阅">×</button>
+        <div><p class="section-kicker" data-i18n="section.liveReview">FINAL REMOTE REVIEW</p><h2 id="live-dialog-title" data-i18n="live.dialog.title">Confirm GitHub write</h2></div>
+        <button class="icon-button" id="close-live-dialog-button" type="submit" value="cancel" aria-label="Close GitHub submission review" data-i18n-aria-label="live.dialog.close">×</button>
       </div>
       <div class="danger-banner" id="live-dialog-warning">
-        <strong>此操作会真实写入远程仓库</strong>
-        <p>以下提交将直接写入 GitHub 仓库的默认分支，且无法在 Commit Canvas 页面内撤销。提交前请逐项核对。</p>
+        <strong data-i18n="live.dialog.warning.title">This action really writes to a remote repository</strong>
+        <p data-i18n="live.dialog.warning.body">The commits below will be written directly to the GitHub repository’s default branch and cannot be undone in Commit Canvas. Check every item before submitting.</p>
       </div>
       <dl class="live-review-list">
-        <div><dt>GitHub 账户</dt><dd id="live-review-account">—</dd></div>
-        <div><dt>远程仓库</dt><dd id="live-review-repository">—</dd></div>
-        <div><dt>目标默认分支</dt><dd id="live-review-branch">—</dd></div>
-        <div><dt>提交总数</dt><dd id="live-review-count">0</dd></div>
-        <div><dt>提交日期</dt><dd id="live-review-dates">—</dd></div>
+        <div><dt data-i18n="live.review.account">GitHub account</dt><dd id="live-review-account">—</dd></div>
+        <div><dt data-i18n="live.review.repository">Remote repository</dt><dd id="live-review-repository">—</dd></div>
+        <div><dt data-i18n="live.review.branch">Target default branch</dt><dd id="live-review-branch">—</dd></div>
+        <div><dt data-i18n="live.review.count">Total commits</dt><dd id="live-review-count">0</dd></div>
+        <div><dt data-i18n="live.review.dates">Commit dates</dt><dd id="live-review-dates">—</dd></div>
       </dl>
       <div class="field-control live-confirm-control">
-        <label for="live-confirm-input">输入确认短语</label>
+        <label for="live-confirm-input" data-i18n="live.confirm.label">Enter the confirmation phrase</label>
         <input id="live-confirm-input" type="text" autocomplete="off" spellcheck="false" aria-describedby="live-confirm-help">
-        <small id="live-confirm-help">请输入 <strong id="live-confirm-phrase">尚未生成</strong> 以启用最终提交。</small>
+        <small id="live-confirm-help"><span data-i18n="live.confirm.help.before">Enter</span> <strong id="live-confirm-phrase" data-i18n="live.confirm.pending">Not generated</strong> <span data-i18n="live.confirm.help.after">to enable final submission.</span></small>
       </div>
       <label id="live-high-volume-confirm-wrap" hidden>
         <input id="live-high-volume-confirm" type="checkbox">
-        我了解这是至少 200 次提交的高量操作，并确认继续。
+        <span data-i18n="live.highVolume">I understand this is a high-volume operation of at least 200 commits and choose to continue.</span>
       </label>
       <div class="dialog-actions">
-        <button class="button button-quiet" type="submit" value="cancel">返回修改</button>
-        <button class="button button-danger" id="confirm-live-submit-button" type="button" disabled>确认写入默认分支</button>
+        <button class="button button-quiet" type="submit" value="cancel" data-i18n="live.return">Return to editing</button>
+        <button class="button button-danger" id="confirm-live-submit-button" type="button" disabled data-i18n="live.confirm.submit">Write to default branch</button>
       </div>
     </form>
   </dialog>
@@ -298,19 +304,19 @@
   <dialog class="script-dialog" id="script-dialog" aria-labelledby="script-title">
     <div class="dialog-card script-card">
       <div class="script-dialog-head">
-        <div><p class="section-kicker">REVIEW BEFORE RUNNING</p><h2 id="script-title">逐行审阅脚本</h2></div>
-        <button class="icon-button" id="close-script-button" type="button" aria-label="关闭脚本预览">×</button>
+        <div><p class="section-kicker" data-i18n="section.scriptReview">REVIEW BEFORE RUNNING</p><h2 id="script-title" data-i18n="script.dialog.title">Review the script line by line</h2></div>
+        <button class="icon-button" id="close-script-button" type="button" aria-label="Close script preview" data-i18n-aria-label="script.dialog.close">×</button>
       </div>
       <div class="safety-banner">
-        <strong>只在你拥有的全新独立练习仓库中运行</strong>
-        <p>把脚本留在仓库外，以练习仓库作为终端当前目录；确认邮箱、日期、时区和提交总数。脚本不会初始化仓库、不会推送，也不会联网。</p>
+        <strong data-i18n="script.warning.title">Run only in a new, separate practice repository that you own</strong>
+        <p data-i18n="script.warning.body">Keep the script outside the repository and use the practice repository as the terminal’s current directory. Verify the email, dates, time zone, and total. The script does not initialize a repository, push, or connect to the network.</p>
       </div>
       <div class="script-meta" id="script-meta"></div>
       <pre class="script-preview" tabindex="0"><code id="script-output"></code></pre>
-      <label class="review-check"><input id="review-confirm" type="checkbox"> <span>我已阅读脚本，并确认要在自己的独立练习仓库中使用。</span></label>
+      <label class="review-check"><input id="review-confirm" type="checkbox"> <span data-i18n="script.confirm">I have read the script and confirm that I will use it only in my own separate practice repository.</span></label>
       <div class="dialog-actions split-actions">
-        <button class="button button-quiet" id="copy-script-button" type="button">复制脚本</button>
-        <button class="button button-primary" id="download-script-button" type="button" disabled>下载脚本</button>
+        <button class="button button-quiet" id="copy-script-button" type="button" data-i18n="script.copy">Copy script</button>
+        <button class="button button-primary" id="download-script-button" type="button" disabled data-i18n="script.download">Download script</button>
       </div>
     </div>
   </dialog>

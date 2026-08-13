@@ -12,7 +12,36 @@ import * as core from "../src/core.js";
 const DEFAULT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_JOBS = 20;
-const PUBLIC_PATHS = new Set(["/index.html", "/styles.css", "/src/app.js", "/src/core.js"]);
+const PUBLIC_PATHS = new Set(["/index.html", "/styles.css", "/src/app.js", "/src/core.js", "/src/i18n.js"]);
+const SERVICE_ERROR_CODES = new Set([
+  "ACCOUNT_CHANGED",
+  "AMBIGUOUS_REF_UPDATE",
+  "CLI_FAILED",
+  "CLI_UNAVAILABLE",
+  "DEFAULT_BRANCH_CHANGED",
+  "GITHUB_REQUEST_FAILED",
+  "HEAD_MOVED",
+  "HISTORY_LIMIT_REACHED",
+  "INSUFFICIENT_PERMISSION",
+  "INVALID_INPUT",
+  "INVALID_PLAN",
+  "INVALID_RESPONSE",
+  "UNMANAGED_REPOSITORY",
+]);
+const COMPANION_ERROR_CODES = new Set([
+  "ACCOUNT_MISMATCH",
+  "API_NOT_FOUND",
+  "CONFIRMATION_MISMATCH",
+  "INTERNAL_ERROR",
+  "JOB_NOT_FOUND",
+  "LIVE_UNAVAILABLE",
+  "PAYLOAD_TOO_LARGE",
+  "REPOSITORY_CHANGED",
+  "REQUEST_FORBIDDEN",
+  "REQUEST_INVALID",
+  "SUBMISSION_ACTIVE",
+  "UNSUPPORTED_MEDIA_TYPE",
+]);
 
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -68,6 +97,26 @@ function errorMessage(error) {
   return error.message.replace(/[\r\n\t]+/g, " ").slice(0, 300);
 }
 
+function codedError(code, message, statusCode) {
+  const error = new Error(message);
+  error.apiCode = code;
+  if (statusCode !== undefined) error.statusCode = statusCode;
+  return error;
+}
+
+function apiErrorPayload(error, explicitCode) {
+  const candidate = explicitCode ?? error?.apiCode ?? error?.code;
+  let code;
+  if (COMPANION_ERROR_CODES.has(candidate) || SERVICE_ERROR_CODES.has(candidate)) {
+    code = candidate;
+  } else if (error instanceof URIError || error instanceof SyntaxError || error instanceof TypeError || error instanceof RangeError) {
+    code = "REQUEST_INVALID";
+  } else {
+    code = "INTERNAL_ERROR";
+  }
+  return { code };
+}
+
 function json(response, status, value) {
   const body = `${JSON.stringify(value)}\n`;
   response.writeHead(status, {
@@ -87,27 +136,25 @@ function text(response, status, body = "") {
   response.end(body);
 }
 
-function apiError(response, status, error) {
-  json(response, status, { error: errorMessage(error) });
+function apiError(response, status, error, code) {
+  json(response, status, { error: apiErrorPayload(error, code) });
 }
 
 function exactKeys(value, expected, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError(`${label} must be a JSON object`);
+    throw codedError("REQUEST_INVALID", `${label} must be a JSON object`);
   }
   const actual = Object.keys(value).sort();
   const allowed = [...expected].sort();
   if (actual.length !== allowed.length || actual.some((key, index) => key !== allowed[index])) {
-    throw new TypeError(`${label} contains missing or unknown fields`);
+    throw codedError("REQUEST_INVALID", `${label} contains missing or unknown fields`);
   }
 }
 
 async function readJson(request) {
   const mediaType = String(request.headers["content-type"] ?? "").split(";", 1)[0].trim().toLowerCase();
   if (mediaType !== "application/json") {
-    const error = new TypeError("Content-Type must be application/json");
-    error.statusCode = 415;
-    throw error;
+    throw codedError("UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json", 415);
   }
 
   let size = 0;
@@ -115,18 +162,14 @@ async function readJson(request) {
   for await (const chunk of request) {
     size += chunk.length;
     if (size > MAX_JSON_BYTES) {
-      const error = new RangeError(`JSON body exceeds ${MAX_JSON_BYTES} bytes`);
-      error.statusCode = 413;
-      throw error;
+      throw codedError("PAYLOAD_TOO_LARGE", `JSON body exceeds ${MAX_JSON_BYTES} bytes`, 413);
     }
     chunks.push(chunk);
   }
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch {
-    const error = new SyntaxError("Request body is not valid JSON");
-    error.statusCode = 400;
-    throw error;
+    throw codedError("REQUEST_INVALID", "Request body is not valid JSON", 400);
   }
 }
 
@@ -137,20 +180,14 @@ function isAllowedHost(host) {
 function requireTrustedRequest(request, csrfToken) {
   const host = String(request.headers.host ?? "");
   if (!isAllowedHost(host)) {
-    const error = new Error("Untrusted Host header");
-    error.statusCode = 403;
-    throw error;
+    throw codedError("REQUEST_FORBIDDEN", "Untrusted Host header", 403);
   }
   if (request.method === "POST") {
     if (request.headers.origin !== `http://${host}`) {
-      const error = new Error("Untrusted request origin");
-      error.statusCode = 403;
-      throw error;
+      throw codedError("REQUEST_FORBIDDEN", "Untrusted request origin", 403);
     }
     if (request.headers["x-commit-canvas-csrf"] !== csrfToken) {
-      const error = new Error("Missing or invalid request token");
-      error.statusCode = 403;
-      throw error;
+      throw codedError("REQUEST_FORBIDDEN", "Missing or invalid request token", 403);
     }
   }
 }
@@ -269,7 +306,7 @@ export async function createCommitCanvasServer({
         return;
       }
       if (!live) {
-        apiError(response, 404, new Error("Live GitHub mode is available only from the local companion"));
+        apiError(response, 404, new Error("Live GitHub mode is available only from the local companion"), "LIVE_UNAVAILABLE");
         return;
       }
 
@@ -297,7 +334,7 @@ export async function createCommitCanvasServer({
 
       if (requestUrl.pathname === "/api/submissions" && request.method === "POST") {
         if (activeJobId && ["queued", "running"].includes(jobs.get(activeJobId)?.status)) {
-          apiError(response, 409, new Error("Another submission is still running"));
+          apiError(response, 409, new Error("Another submission is still running"), "SUBMISSION_ACTIVE");
           return;
         }
         const body = await readJson(request);
@@ -305,22 +342,18 @@ export async function createCommitCanvasServer({
         const account = await github.getSession();
         const freshSnapshot = await github.getContributionSnapshot(body.design?.endDate);
         if (freshSnapshot.account !== account.login) {
-          throw new Error("Contribution calendar account does not match the authenticated account");
+          throw codedError("ACCOUNT_MISMATCH", "Contribution calendar account does not match the authenticated account", 409);
         }
         const plan = core.buildCommitPlan(
           { ...body.design, email: account.noreplyEmail },
           freshSnapshot,
         );
         if (body.confirmation !== plan.confirmationPhrase) {
-          const error = new Error("Confirmation phrase does not match the reviewed plan");
-          error.statusCode = 400;
-          throw error;
+          throw codedError("CONFIRMATION_MISMATCH", "Confirmation phrase does not match the reviewed plan", 400);
         }
         const repository = await github.validateManagedRepository(body.repository);
         if (repository.defaultBranch !== body.expectedDefaultBranch || repository.head !== body.expectedHead) {
-          const error = new Error("Repository changed after review; reconnect it and review again");
-          error.statusCode = 409;
-          throw error;
+          throw codedError("REPOSITORY_CHANGED", "Repository changed after review; reconnect it and review again", 409);
         }
 
         const id = randomBytes(16).toString("hex");
@@ -358,7 +391,7 @@ export async function createCommitCanvasServer({
           } catch (error) {
             job.status = "failed";
             job.phase = "failed";
-            job.error = errorMessage(error);
+            job.error = apiErrorPayload(error);
           } finally {
             if (activeJobId === id) activeJobId = null;
           }
@@ -369,12 +402,12 @@ export async function createCommitCanvasServer({
       const jobMatch = /^\/api\/submissions\/([a-f0-9]{32})$/.exec(requestUrl.pathname);
       if (jobMatch && request.method === "GET") {
         if (request.headers["x-commit-canvas-csrf"] !== csrfToken) {
-          apiError(response, 403, new Error("Missing or invalid request token"));
+          apiError(response, 403, new Error("Missing or invalid request token"), "REQUEST_FORBIDDEN");
           return;
         }
         const job = jobs.get(jobMatch[1]);
         if (!job) {
-          apiError(response, 404, new Error("Submission job was not found"));
+          apiError(response, 404, new Error("Submission job was not found"), "JOB_NOT_FOUND");
           return;
         }
         json(response, 200, { job: publicJob(job) });
@@ -382,7 +415,7 @@ export async function createCommitCanvasServer({
       }
 
       response.setHeader("Allow", "GET, POST");
-      apiError(response, 404, new Error("API route was not found"));
+      apiError(response, 404, new Error("API route was not found"), "API_NOT_FOUND");
     } catch (error) {
       if (error instanceof URIError) {
         apiError(response, 400, error);

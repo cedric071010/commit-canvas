@@ -31,5 +31,6 @@ work/
 *.commit-canvas-artifact.json
 *.commit-canvas.json
 *.commit-canvas-snapshot.json
+commit-canvas-????-??-??.json
 commit-canvas*.sh
 commit-canvas*.ps1

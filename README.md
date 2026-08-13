@@ -1,93 +1,150 @@
-# Commit Canvas / 提交画布
+# Commit Canvas
 
-Commit Canvas 是一个 53 × 7 的 GitHub 贡献图绘画教育工具。它现在有两种明确分离的运行模式：GitHub Pages/静态模式继续负责离线绘图、JSON 与贡献快照导入导出、以及可逐行审阅的 Bash/PowerShell 脚本；localhost 实时模式可读取真实贡献，并把计划作为真实 commit 写入一个严格管理的练习仓库。
+Commit Canvas is an educational 53 × 7 GitHub contribution-graph drawing tool. The interface defaults to English and provides a runtime **English / 简体中文** language switch. It supports two deliberately separate modes:
 
-> 装饰性提交不是工作量、能力或生产力的证明。请把本项目用于学习 Git 元数据和 GitHub 贡献规则，不要用它伪造经历或误导他人。
+- **Static mode**, including GitHub Pages, keeps drawing, design files, contribution snapshots, and reviewable script export offline.
+- **Live localhost mode** reads the active user's real contribution calendar and can write real commits to one strictly managed practice repository.
 
-## 两种模式
+> Decorative commits are not evidence of work, skill, or productivity. Use Commit Canvas to learn about Git metadata and GitHub contribution rules—not to fabricate experience or mislead people.
 
-### 静态模式（默认、GitHub Pages）
+## Static mode: offline drawing and export
 
-直接访问 GitHub Pages，或在项目根目录运行：
+Use the static GitHub Pages deployment, or start the local static server from the repository root:
 
 ```powershell
 npm.cmd run serve
 ```
 
-macOS/Linux 使用 `npm run serve`。打开 <http://127.0.0.1:4173> 后可离线绘图、保存设计 JSON、导入贡献快照，并导出本地提交脚本。静态页面没有 GitHub 登录能力，不会读取或修改 GitHub；“提交到 GitHub”按钮只有在下面的 localhost 实时模式中才会真正更新 GitHub。
+On macOS or Linux, use `npm run serve`. Then open <http://127.0.0.1:4173>.
 
-如需离线底图，可继续使用已登录的 `gh` 生成无凭据快照：
+Static mode can:
+
+- draw on the 53 × 7 canvas with five planned intensity levels;
+- save and restore design JSON;
+- import a previously generated contribution snapshot as a read-only background;
+- export reviewable Bash or PowerShell scripts.
+
+Static mode has no GitHub login capability and does not read or modify GitHub. The **Submit to GitHub** action performs a real remote update only when the page is served by the live localhost companion described below.
+
+The exported scripts are an advanced offline fallback. They create commits only in the current local Git repository and contain no token, network request, repository initialization, or `git push`. Read the complete script before running it in a new, standalone practice repository you own.
+
+## Optional offline contribution snapshots
+
+An authenticated GitHub CLI session can create a credential-free JSON snapshot for static mode:
 
 ```powershell
 npm.cmd run snapshot -- --end-date 2026-08-13 --output .\contribution-snapshot.commit-canvas-snapshot.json
 ```
 
-macOS/Linux 将命令改为 `npm run snapshot -- ...`。快照含账号和逐日活动统计，可能属于个人数据；请只在本机保管，不要提交。脚本导出同样只是离线后备：脚本只在当前本地 Git 仓库创建 commit，不含 Token、网络请求、仓库初始化或 `git push`，运行前必须逐行审阅。
+On macOS or Linux, use `npm run snapshot -- ...`. Keep `--end-date` aligned with the canvas end date. The generated file contains no token or cookie, but it does contain the account name and daily activity statistics, so it is personal data. Keep it local and do not attach it to public issues or pull requests. Snapshot files use the `.commit-canvas-snapshot.json` suffix and are ignored by Git.
 
-### localhost 实时模式
+A snapshot represents only the moment it was generated. Refresh it after account activity or date changes and before final export. It is not embedded in ordinary design JSON.
 
-前置条件：
+## Live localhost mode: real GitHub writes
 
-- 安装 Node.js 与 GitHub CLI (`gh`)；
-- 运行 `gh auth login` 并完成登录；
-- 运行当前 GitHub CLI 的普通 `gh auth login` 交互登录；其文档列出的最低 scopes 为 `repo`、`read:org`、`gist`。可用 `gh auth status` 检查；若组织策略或旧登录缺少权限，请按 `gh` 的提示重新授权。
+### Prerequisites
 
-在仓库根目录运行：
+- Install Node.js and the GitHub CLI (`gh`).
+- Each user must run `gh auth login` and authenticate with **their own GitHub account**.
+- The GitHub CLI documentation lists `repo`, `read:org`, and `gist` as the minimum scopes for its classic-token login flow. Use `gh auth status` to inspect the current login and follow `gh` guidance if an older login or organization policy requires reauthorization.
+
+Commit Canvas has no hard-coded account. On every run, the localhost companion asks the already-authenticated `gh` session for its active account and derives the account login and GitHub-provided `noreply` email dynamically. Switching the active `gh` account therefore changes which account the companion validates and uses.
+
+If `GH_TOKEN` or `GITHUB_TOKEN` is set, GitHub CLI gives that environment token priority over credentials stored by `gh auth login`. Run `gh auth status --active` before starting Commit Canvas and verify the account shown in the Live UI before approving a write. The companion must run under the same local OS user/session that owns the selected `gh` login; the hosted static page cannot share or reuse another person's authentication.
+
+Start live mode from the repository root:
 
 ```powershell
 npm.cmd run live
 ```
 
-macOS/Linux 使用 `npm run live`。辅助程序只监听 `127.0.0.1:4173`，会自动打开浏览器，并执行以下真实操作：
+On macOS or Linux, use `npm run live`. The companion listens only on `127.0.0.1:4173` and opens the UI automatically.
 
-1. 复用本机已认证的 `gh` 读取当前账号和真实贡献日历；
-2. 创建或连接一个名为 `commit-canvas` 或 `commit-canvas-*`、由当前账号拥有、非 fork、带管理标记的专用练习仓库；
-3. 在最终确认后，通过 GitHub Git Data API 创建一条复用当前 tree 的空 commit 链；
-4. 以非 force 的方式更新该仓库默认分支，并在写入前再次校验账号、仓库和分支头，避免覆盖并发变化。
+Live mode performs real operations:
 
-这会真实更新 GitHub。页面中的最终按钮仅在此实时 localhost 模式可用；确认后没有页面内撤销功能。
+1. It reads the active account and real contribution calendar through the authenticated `gh` CLI.
+2. It creates or connects to a dedicated repository named `commit-canvas` or `commit-canvas-*`.
+3. After a final review and explicit confirmation, it uses the GitHub Git Data API to create an empty commit chain that reuses the current tree.
+4. It rechecks the account, managed repository, and reviewed branch head, then updates the default branch without force.
 
-## 安全边界与托管仓库
+The final live button really updates GitHub. There is no in-page undo after confirmation.
 
-- 浏览器永远不会接收 GitHub Token、cookie 或 `Authorization` 头；认证和 GitHub API 调用只发生在本机 Node.js 辅助程序与已登录的 `gh` 之间。
-- 浏览器只通过同源 `/api/...` 请求与 `127.0.0.1` 辅助程序通信。服务不监听局域网地址，不允许跨源调用，并使用同源、Host 与请求令牌检查。
-- 实时写入只允许严格验证的 `commit-canvas` / `commit-canvas-*` 托管仓库：必须由当前账号拥有、不是 fork、保留 Commit Canvas 管理标记，且目标是其默认分支。它不会接受任意仓库或工作仓库。
-- 默认分支更新不使用 force。仓库头在审阅后发生变化时，提交会停止并要求重新连接、重新审阅。
-- 工具不会删除仓库、重写既有历史或为你隐藏操作。若不再需要练习仓库，请在 GitHub 上核对完整名称和内容后自行处理；仓库删除可能不可恢复。
-- 单次计划硬上限为 500 个 commit，达到 200 个时需要额外确认。为了保持稳定标记的幂等检查，单个托管仓库的可写历史扫描上限为 2,000 个 commit；到达边界后仍可查看仓库，但继续绘制时需要创建新的 `commit-canvas-*` 托管仓库。护栏不代表 GitHub 对自动化活动的许可；请遵守 [GitHub Acceptable Use Policies](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies)。
-- 辅助程序接受提交任务后，页面会保留一个不含凭据的本地任务编号并继续查询。若查询中断或服务重启，页面不会把未知结果误报为失败；请先在 GitHub 核对目标仓库，再决定继续查询或放弃本地任务记录。
+## Privacy and security boundaries
 
-## 贡献计入与颜色限制
+- The browser never receives a GitHub token, cookie, or `Authorization` header. Authentication and GitHub API calls stay between the local Node.js companion, the installed `gh` CLI, and GitHub.
+- The browser receives only a minimal account summary needed for review: login, numeric account ID, display name, and the derived GitHub `noreply` address. It never receives the full `/user` response, private email list, organization list, plan, billing, or private-repository metadata.
+- GitHub CLI normally stores credentials in the operating-system credential store. Its documented fallback can use a plain-text file when no credential store is available; users should review `gh auth status` and their local CLI setup on shared or untrusted computers.
+- Browser requests are limited to same-origin `/api/...` routes on the localhost companion. The service does not listen on a LAN address, rejects cross-origin requests, and checks the Host, Origin, and per-session request token.
+- The short-lived request token used between the page and companion is not a GitHub credential.
+- A submitted job may leave a credential-free job ID in browser session storage so interrupted status polling can resume. Clearing or abandoning that local ID does not cancel, undo, or determine the remote result; check the repository on GitHub first.
+- Contribution snapshots and exported designs may contain personal activity or user-created content. Their runtime/export patterns are ignored by Git, but users must still keep them out of commits, issues, and pull requests.
+- No personal proof-account data belongs in this repository, its fixtures, or documentation.
 
-GitHub 是否计入贡献由 GitHub 决定，不由画布预览决定。至少需要满足：
+## Managed-repository restrictions
 
-- commit 作者邮箱与当前 GitHub 账号关联；实时模式使用该账号的 GitHub `noreply` 邮箱；
-- commit 位于非 fork 仓库，并最终出现在默认分支（或符合规则的 `gh-pages` 分支）；
-- 满足 GitHub 的仓库关系条件；私有贡献还受个人资料可见性设置影响；
-- author date、时区和目标日期正确。
+Live writes are restricted to a repository that passes every management check:
 
-即使满足条件，GitHub 索引贡献也可能需要最多 24 小时。贡献强度颜色会随主题、时间范围和活动分布动态计算，因此五档预览不能保证 GitHub 最终显示完全相同的色阶或深浅。
+- its name is exactly `commit-canvas` or follows the conservative `commit-canvas-*` pattern;
+- the active authenticated account owns it;
+- it is not a fork;
+- its reachable history retains the Commit Canvas management marker and is linear;
+- writes target its default branch, not an arbitrary branch or working repository.
 
-请以官方说明为准：
+The companion revalidates these conditions before writing. A branch-head change after review stops the operation and requires reconnection and a new review. Reference updates are never forced. Commit Canvas does not delete repositories, rewrite existing history, or silently hide operations.
+
+The managed-history scan is capped at 2,000 commits so idempotency markers can be checked within a bounded history. At that limit the repository remains viewable, but further drawing requires a new managed `commit-canvas-*` repository.
+
+If a submitted job's status becomes unknown because polling was interrupted or the companion restarted, do not assume failure. Inspect the target repository on GitHub before resuming the query or discarding the local job record.
+
+## Contribution eligibility and visual limits
+
+GitHub—not Commit Canvas—decides whether a commit appears on a profile contribution graph. At minimum, check that:
+
+- the author email belongs to the GitHub account; live mode uses the dynamically derived GitHub `noreply` email;
+- the commit is in a standalone, non-fork repository;
+- the commit reaches the repository's default branch, or an otherwise eligible `gh-pages` branch;
+- GitHub's repository-relationship conditions are satisfied;
+- private-contribution visibility settings allow the intended profile display;
+- the author date, time zone, and intended calendar date are correct.
+
+Even eligible contributions can take up to 24 hours to be indexed. GitHub calculates graph intensity from the selected time range, activity distribution, theme, and current site behavior. The five canvas levels are planning aids and cannot guarantee exact GitHub colors or shades.
+
+Official references:
 
 - [Profile contributions reference](https://docs.github.com/en/account-and-profile/reference/profile-contributions-reference)
 - [Troubleshooting missing contributions](https://docs.github.com/en/account-and-profile/how-tos/contribution-settings/troubleshooting-missing-contributions)
 - [GitHub CLI authentication](https://cli.github.com/manual/gh_auth_login)
 
-## 开发与贡献
+## Safety limits and responsible use
 
-运行全部语法检查和测试：
+- A single plan has a hard limit of 500 commits.
+- Plans of 200 commits or more require additional confirmation.
+- Prefer small patterns and low intensities.
+- These safeguards are not GitHub permission or an automation quota. Follow the [GitHub Acceptable Use Policies](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies).
+- Use only practice repositories you own. Never describe decorative activity as genuine development work.
+- Repository deletion can be irreversible. Commit Canvas does not delete a managed repository; verify its full name and contents before handling it yourself on GitHub.
+
+## Development and testing
+
+Run the complete syntax and test suite:
 
 ```powershell
 npm.cmd run check
 ```
 
-贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。项目思路受到 MIT 许可的 [gelstudios/gitfiti](https://github.com/gelstudios/gitfiti) 启发，但未复制其实现代码。Commit Canvas 与 GitHub, Inc. 无隶属、认可或赞助关系。
+On macOS or Linux, use `npm run check`. Individual development commands are:
 
-## English summary
+```powershell
+npm.cmd run serve
+npm.cmd run live
+npm.cmd run snapshot -- --help
+npm.cmd test
+```
 
-Commit Canvas is an independent educational 53 × 7 contribution-graph drawing tool with two modes. Static GitHub Pages remains offline and supports drawing, JSON/snapshot files, and reviewable script export. `npm run live` starts an auto-opening, loopback-only companion that uses the already authenticated `gh` CLI to read real contributions and make real, non-force Git Data API commits only in a strictly validated, user-owned, non-fork `commit-canvas` / `commit-canvas-*` practice repository. The browser never receives a GitHub token. Only the live localhost button updates GitHub. Eligible contributions can take up to 24 hours to appear, and exact graph shades are never guaranteed. Use small patterns for education, follow GitHub's rules, and never present decorative commits as real work.
+Default tests and CI must use anonymized fixtures and injected fake GitHub services; they must not contact a real account. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request.
 
-## 许可
+## Attribution and license
 
-本项目采用 [MIT License](LICENSE)，Copyright © 2026 Cedric / cedric071010。
+The educational concept was inspired by the MIT-licensed [gelstudios/gitfiti](https://github.com/gelstudios/gitfiti); Commit Canvas does not copy its implementation. Commit Canvas is an independent community project and is not affiliated with, endorsed by, or sponsored by GitHub, Inc.
+
+This project is released under the [MIT License](LICENSE). Copyright © 2026 Cedric / cedric071010.

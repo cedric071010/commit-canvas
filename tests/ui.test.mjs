@@ -8,10 +8,20 @@ import {
   liveConfirmationReady,
   projectPlanOntoDates,
 } from "../src/app.js";
+import {
+  CATALOGS,
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
+  assertCatalogParity,
+  createI18n,
+  localizeDocument,
+  normalizeLocale,
+} from "../src/i18n.js";
 
-const [html, javascript, css, readme, gitignore] = await Promise.all([
+const [html, javascript, i18nSource, css, readme, gitignore] = await Promise.all([
   readFile(new URL("../index.html", import.meta.url), "utf8"),
   readFile(new URL("../src/app.js", import.meta.url), "utf8"),
+  readFile(new URL("../src/i18n.js", import.meta.url), "utf8"),
   readFile(new URL("../styles.css", import.meta.url), "utf8"),
   readFile(new URL("../README.md", import.meta.url), "utf8"),
   readFile(new URL("../.gitignore", import.meta.url), "utf8"),
@@ -40,7 +50,7 @@ function contrastRatio(foreground, background) {
 
 test("the page has a useful, accessible document structure", () => {
   assert.match(html, /<!doctype\s+html/i);
-  assert.match(html, /<html\b[^>]*\blang\s*=/i);
+  assert.match(html, /<html\b[^>]*\blang=["']en["']/i);
   assert.match(html, /<meta\b[^>]*\bcharset\s*=/i);
   assert.match(html, /<meta\b[^>]*\bname=["']viewport["']/i);
   assert.match(html, /<title>[^<]+<\/title>/i);
@@ -49,6 +59,124 @@ test("the page has a useful, accessible document structure", () => {
   assert.match(html, /<button\b/i);
   assert.match(html, /<label\b/i);
   assert.match(html + javascript, /\bkeydown\b/i, "the drawing UI should support a keyboard");
+  assert.match(
+    html,
+    /<div\b[^>]*\bid=["']commit-grid["'][^>]*\baria-describedby=["']grid-help["'][^>]*>/i,
+    "the contribution grid should expose its keyboard and pointer instructions",
+  );
+});
+
+test("English is the non-persistent default and the accessible language switch exposes both locales", () => {
+  assert.equal(DEFAULT_LOCALE, "en");
+  assert.deepEqual(SUPPORTED_LOCALES, ["en", "zh-Hans"]);
+  assert.match(html, /<html\b[^>]*\blang=["']en["']/i);
+  assert.match(html, /data-locale=["']en["'][^>]*aria-pressed=["']true["']/i);
+  assert.match(html, /data-locale=["']zh-Hans["'][^>]*aria-pressed=["']false["']/i);
+  assert.match(html, /data-i18n-aria-label=["']language\.label["']/i);
+  assert.match(javascript, /ui\.setLocale\(locale\)/);
+  assert.match(javascript, /localizeDocument\(document, ui\)/);
+  assert.doesNotMatch(javascript + i18nSource, /localStorage/i);
+  assert.doesNotMatch(javascript, /sessionStorage\.(?:setItem|getItem)\([^\n]*(?:locale|language)/i);
+});
+
+test("translation catalogs have exact parity, are frozen, and format both locales", () => {
+  assert.equal(assertCatalogParity(), true);
+  assert.equal(Object.isFrozen(CATALOGS), true);
+  assert.equal(Object.isFrozen(CATALOGS.en), true);
+  assert.equal(Object.isFrozen(CATALOGS["zh-Hans"]), true);
+  assert.equal(normalizeLocale("zh-CN"), "zh-Hans");
+  assert.equal(normalizeLocale("fr-FR"), "en");
+
+  const english = createI18n();
+  const chinese = createI18n("zh-Hans");
+  assert.equal(english.locale, "en");
+  assert.equal(english.plural("cell.existing", 1), "GitHub already has 1 contribution");
+  assert.equal(english.plural("cell.existing", 2), "GitHub already has 2 contributions");
+  assert.equal(chinese.plural("cell.existing", 2), "GitHub 已有 2 次贡献");
+  assert.equal(english.formatNumber(12345), "12,345");
+  assert.equal(english.formatMonth("2025-01-02"), "Jan");
+  assert.equal(chinese.formatMonth("2025-01-02"), "1月");
+  assert.equal(english.formatWeekday("2025-01-02"), "Thursday");
+  assert.match(chinese.formatWeekday("2025-01-02"), /星期四|周四/);
+  assert.match(english.formatIsoDate("2025-01-02"), /Jan 2, 2025/);
+  assert.match(chinese.formatIsoDate("2025-01-02"), /2025.*1.*2/);
+  assert.throws(() => english.formatIsoDate("2025-02-29"), /valid calendar date/);
+  assert.throws(() => english.formatMonth("not-a-date"), /YYYY-MM-DD/);
+});
+
+test("catalog parity rejects value-shape and interpolation drift", () => {
+  assert.throws(() => assertCatalogParity({
+    en: { greeting: 'Hello {name}' },
+    'zh-Hans': { greeting: '你好' },
+  }), /placeholders differ/);
+  assert.throws(() => assertCatalogParity({
+    en: { items: { one: '{count} item', other: '{count} items' } },
+    'zh-Hans': { items: '{count} 项' },
+  }), /value type differs/);
+  assert.throws(() => assertCatalogParity({
+    en: { items: { one: '{count} item', other: '{count} items' } },
+    'zh-Hans': { items: { one: '{count} 项' } },
+  }), /requires an other form/);
+});
+
+test("interpolation stays text-only and document metadata and attributes follow the active locale", () => {
+  const dangerous = '<img src=x onerror="alert(1)">';
+  const english = createI18n();
+  assert.equal(english.t("error.startup", { message: dangerous }), `The tool could not start: ${dangerous}`);
+
+  const textNode = { dataset: { i18n: "canvas.heading" }, textContent: "" };
+  const labelNode = {
+    dataset: { i18nAriaLabel: "brand.home" },
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; },
+  };
+  const description = {
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; },
+  };
+  const documentStub = {
+    nodeType: 9,
+    documentElement: { lang: "en" },
+    title: "",
+    querySelector(selector) { return selector === 'meta[name="description"]' ? description : null; },
+    querySelectorAll(selector) {
+      if (selector === "[data-i18n]") return [textNode];
+      if (selector === "[data-i18n-aria-label]") return [labelNode];
+      return [];
+    },
+  };
+  const chinese = createI18n("zh-Hans");
+  localizeDocument(documentStub, chinese);
+  assert.equal(documentStub.documentElement.lang, "zh-Hans");
+  assert.equal(documentStub.title, CATALOGS["zh-Hans"]["meta.title"]);
+  assert.equal(description.attributes.content, CATALOGS["zh-Hans"]["meta.description"]);
+  assert.equal(textNode.textContent, "画布");
+  assert.equal(labelNode.attributes["aria-label"], "Commit Canvas 首页");
+  assert.doesNotMatch(i18nSource, /\.innerHTML\s*=/);
+});
+
+test("all static localization hooks resolve and browser application copy is catalog-driven", () => {
+  const keys = [
+    ...html.matchAll(/data-i18n(?:-aria-label|-placeholder|-title|-data-stamp)?=["']([^"']+)["']/g),
+  ].map((match) => match[1]);
+  assert.ok(keys.length > 80, "the visible shell should be fully localization-addressable");
+  for (const key of keys) {
+    assert.ok(Object.hasOwn(CATALOGS.en, key), `missing English markup translation: ${key}`);
+    assert.ok(Object.hasOwn(CATALOGS["zh-Hans"], key), `missing Chinese markup translation: ${key}`);
+  }
+  assert.doesNotMatch(javascript, /[一-龥]/, "dynamic browser copy belongs in the translation catalog");
+  assert.doesNotMatch(html.replace("简体中文", ""), /[一-龥]/, "English-default markup should contain no stale Chinese UI copy");
+});
+
+test("protocol values remain invariant and are never localized", () => {
+  for (const value of ["private", "public", "bash", "powershell", "heart", "hello", "wave", "stars"]) {
+    assert.match(html, new RegExp(`value=["']${value}["']|data-template=["']${value}["']`));
+  }
+  assert.match(javascript, /plan\.confirmationPhrase/);
+  assert.match(javascript, /confirmation:\s*plan\.confirmationPhrase/);
+  assert.match(javascript, /downloadText\(state\.generatedScript, `commit-canvas\.\$\{extension\}`/);
+  assert.doesNotMatch(i18nSource, /CREATE \{?\d|commit-canvas-managed|X-Commit-Canvas-CSRF/);
+  for (const zone of ["UTC", "Asia/Singapore", "America/New_York"]) assert.match(javascript, new RegExp(`'${zone}'`));
 });
 
 test("CSS and JavaScript are local, external files", () => {
@@ -143,8 +271,9 @@ test("contribution snapshots remain local and visibly separate from design archi
   ]) {
     assert.match(html, new RegExp(`\\bid=["']${id}["']`), `missing snapshot UI element: ${id}`);
   }
-  assert.match(html, /快照不是实时数据/);
-  assert.match(html, /离线后备/);
+  assert.match(html, /A manual snapshot is not live data/);
+  assert.match(html, /offline fallback/i);
+  assert.equal(CATALOGS["zh-Hans"]["snapshot.stale"].includes("手动快照不是实时数据"), true);
   assert.match(javascript, /parseContributionSnapshot/);
   assert.match(javascript, /byDate:\s*new Map\(\)/);
   assert.match(
@@ -207,8 +336,10 @@ test("live GitHub controls and offline fallbacks remain explicit in the markup",
   for (const id of [...liveIds, ...offlineFallbackIds]) {
     assert.match(html, new RegExp(`\\bid=["']${id}["']`), `missing dual-mode UI element: ${id}`);
   }
-  assert.match(html, /真实的远程写入|真实写入远程仓库/);
-  assert.match(html, /高级离线后备/);
+  assert.match(html, /real remote write|really writes to a remote repository/i);
+  assert.match(html, /Advanced offline fallback/);
+  assert.match(CATALOGS["zh-Hans"]["live.warning.title"], /真实的远程写入/);
+  assert.match(CATALOGS["zh-Hans"]["export.heading"], /高级离线后备/);
 });
 
 test("documented snapshot outputs use the ignored private-data suffix", () => {
@@ -218,6 +349,18 @@ test("documented snapshot outputs use the ignored private-data suffix", () => {
     assert.match(output, /\.commit-canvas-snapshot\.json$/);
   }
   assert.match(gitignore, /^\*\.commit-canvas-snapshot\.json$/m);
+});
+
+test("downloaded design archives are ignored by their generated filename", () => {
+  assert.match(javascript, /`commit-canvas-\$\{elements\.endDate\.value\}\.json`/);
+  assert.match(gitignore, /^commit-canvas-\?\?\?\?-\?\?-\?\?\.json$/m);
+});
+
+test("all backend progress phases have localized labels", () => {
+  for (const phase of ["queued", "validating", "validating repository", "creating commits", "complete", "pushed to GitHub", "failed"]) {
+    assert.equal(typeof CATALOGS.en[`phase.${phase}`], "string");
+    assert.equal(typeof CATALOGS["zh-Hans"][`phase.${phase}`], "string");
+  }
 });
 
 test("the CSP permits only same-origin companion connections", () => {
@@ -258,14 +401,26 @@ test("plan projection reports dates lost outside the new window and blocked by e
 test("cell accessibility text distinguishes an unchecked wall from a checked zero", () => {
   assert.equal(
     contributionCellLabel(false, 0, 3),
-    "当前 GitHub 贡献未检查，计划新增 3 次",
+    "GitHub contributions not checked, 3 planned additions",
   );
   assert.equal(
     contributionCellLabel(true, 0, 3),
-    "GitHub 已有 0 次贡献，计划新增 3 次",
+    "GitHub already has 0 contributions, 3 planned additions",
   );
   assert.equal(
     contributionCellLabel(true, 7, 0),
+    "GitHub already has 7 contributions, 0 planned additions",
+  );
+  assert.equal(
+    contributionCellLabel(false, 0, 3, "zh-Hans"),
+    "当前 GitHub 贡献未检查，计划新增 3 次",
+  );
+  assert.equal(
+    contributionCellLabel(true, 0, 3, "zh-Hans"),
+    "GitHub 已有 0 次贡献，计划新增 3 次",
+  );
+  assert.equal(
+    contributionCellLabel(true, 7, 0, "zh-Hans"),
     "GitHub 已有 7 次贡献，计划新增 0 次",
   );
 });
@@ -287,8 +442,10 @@ test("live submission confirms indexing only when every target date grew by its 
     ["2025-01-01", { count: 5 }],
     ["2025-01-02", { count: 0 }],
   ])), false);
-  assert.match(javascript, /GitHub 贡献墙已确认更新/);
-  assert.match(javascript, /等待 GitHub 索引（最长可能 24 小时）/);
+  assert.match(CATALOGS.en["live.result.confirmed"], /update is confirmed/);
+  assert.match(CATALOGS.en["live.result.indexing"], /up to 24 hours/);
+  assert.match(CATALOGS["zh-Hans"]["live.result.confirmed"], /GitHub 贡献墙已确认更新/);
+  assert.match(CATALOGS["zh-Hans"]["live.result.indexing"], /最长可能 24 小时/);
 });
 
 test("live high-volume submission requires a separate acknowledgement at 200 commits", () => {
@@ -301,27 +458,42 @@ test("live high-volume submission requires a separate acknowledgement at 200 com
 test("accepted jobs remain resumable while terminal results use backend created and skipped counts", () => {
   assert.match(javascript, /rememberPendingJob\(payload\.job\.id\)/);
   assert.match(javascript, /expectedDefaultBranch:\s*plan\.expectedDefaultBranch/);
-  assert.match(javascript, /这不表示任务失败；请继续查询/);
+  assert.match(CATALOGS.en["live.pollInterrupted"], /does not mean the task failed/);
+  assert.match(CATALOGS["zh-Hans"]["live.pollInterrupted"], /这不表示任务失败/);
   assert.match(javascript, /completed\.status === 'failed'/);
-  assert.match(javascript, /创建 \$\{created \?\? 0\} 次，跳过 \$\{skipped \?\? 0\} 次/);
-  assert.match(javascript, /全部计划提交已存在，因此没有创建新提交/);
-  assert.match(javascript, /部分提交被跳过，无法按日期即时确认贡献增长/);
+  assert.match(javascript, /ui\.t\('live\.countDetails'/);
+  assert.match(CATALOGS.en["live.result.none"], /no new commit was created/);
+  assert.match(CATALOGS.en["live.result.partial"], /Some commits were skipped/);
+  assert.match(CATALOGS["zh-Hans"]["live.result.none"], /没有创建新提交/);
+  assert.match(CATALOGS["zh-Hans"]["live.result.partial"], /部分提交被跳过/);
 });
 
 test("an unresolved accepted job blocks new writes and a missing local job remains explicitly unknown", () => {
   assert.match(javascript, /elements\.submitLive\.disabled[\s\S]{0,160}state\.pendingJobId/);
-  assert.match(javascript, /if \(state\.pendingJobId\)[\s\S]{0,240}才能提交新计划/);
+  assert.match(javascript, /if \(state\.pendingJobId\)[\s\S]{0,240}live\.pendingBlocked/);
   assert.match(javascript, /if \(state\.submitting \|\| state\.pendingJobId \|\| !plan\) return/);
   assert.match(javascript, /error\?\.status === 404/);
-  assert.match(javascript, /这不表示远端失败/);
-  assert.match(javascript, /请先在 GitHub 核对仓库/);
-  assert.match(javascript, /放弃只会清除本浏览器的查询记录，不会取消、撤销或判断远端任务/);
+  assert.match(CATALOGS.en["live.taskLost"], /does not mean the remote operation failed/);
+  assert.match(CATALOGS.en["live.dismiss.body"], /does not cancel, undo, or determine the remote task/);
+  assert.match(CATALOGS["zh-Hans"]["live.taskLost"], /这不表示远端失败/);
+  assert.match(CATALOGS["zh-Hans"]["live.dismiss.body"], /不会取消、撤销或判断远端任务/);
 });
 
 test("reload completion without submission context reports facts without clearing the canvas", () => {
   assert.match(javascript, /if \(context\) \{[\s\S]*?submittedDates[\s\S]*?restoreLevels\(state\.levels\)[\s\S]*?\}/);
-  assert.match(javascript, /const countDetails = `创建 \$\{created \?\? 0\} 次，跳过 \$\{skipped \?\? 0\} 次`/);
+  assert.match(javascript, /const detailsForLocale = \(\) => \{[\s\S]*?ui\.t\('live\.countDetails'/);
   assert.match(javascript, /const resultUrl = completed\.result\?\.commitUrl/);
+});
+
+test("language changes preserve and retranslate dynamic live status descriptors", () => {
+  assert.doesNotMatch(html.match(/<p\b[^>]*id=["']live-submit-status["'][^>]*>/i)?.[0] ?? "", /data-i18n=/i);
+  assert.match(javascript, /let liveStatusDescriptor = \{ key: 'live\.status\.initial'/);
+  assert.match(javascript, /function setLiveStatusKey\(/);
+  assert.match(javascript, /function renderLiveStatusDescriptor\(/);
+  assert.match(javascript, /localizeDocument\(document, ui\)[\s\S]{0,700}renderLiveStatusDescriptor\(\)/);
+  assert.match(javascript, /setLiveStatusKey\('live\.taskLost'/);
+  assert.match(javascript, /setLiveStatusKey\(messageKey, \(\) => \(\{ details: detailsForLocale\(\) \}\)/);
+  assert.match(javascript, /function applyLocale\(locale\) \{[\s\S]{0,160}elements\.toast\.classList\.remove\('is-visible'\)/);
 });
 
 test("markup avoids inline event handlers and unsafe blank-target links", () => {
@@ -353,4 +525,22 @@ test("responsive styles avoid page overflow and provide accessible touch and dar
   const darkSheet = darkRules.match(/--sheet:\s*#([0-9a-f]{6})/i)?.[1];
   assert.ok(darkRust && darkSheet);
   assert.ok(contrastRatio(darkRust, darkSheet) >= 4.5, "dark-mode accent text must meet 4.5:1 contrast");
+  const selectedLanguage = darkRules.match(/\.language-switcher button\[aria-pressed="true"\]\s*\{([^}]*)\}/i)?.[1] ?? "";
+  const languageInk = selectedLanguage.match(/color:\s*#([0-9a-f]{6})/i)?.[1];
+  const languageBackground = selectedLanguage.match(/background:\s*#([0-9a-f]{6})/i)?.[1];
+  assert.ok(languageInk && languageBackground);
+  assert.ok(contrastRatio(languageInk, languageBackground) >= 4.5, "selected language needs dark-mode contrast");
+
+  const headerRule = css.match(/\.site-header\s*\{([^}]*)\}/i)?.[1] ?? "";
+  const headerToolsRule = css.match(/\.header-tools\s*\{([^}]*)\}/i)?.[1] ?? "";
+  const languageRule = css.match(/\.language-switcher\s*\{([^}]*)\}/i)?.[1] ?? "";
+  assert.match(headerRule, /flex-wrap:\s*wrap/i, "the header should wrap under high zoom");
+  assert.match(headerToolsRule, /flex-wrap:\s*wrap/i, "header controls should wrap rather than clip");
+  assert.match(headerToolsRule, /max-width:\s*100%/i);
+  assert.match(languageRule, /flex-wrap:\s*wrap/i, "language controls should fit very narrow viewports");
+  assert.match(languageRule, /max-width:\s*100%/i);
+
+  const forcedColorsRules = css.match(/@media\s*\(forced-colors:\s*active\)\s*\{([\s\S]*?)\n\}/i)?.[1] ?? "";
+  assert.match(forcedColorsRules, /\.language-switcher button\[aria-pressed="true"\]/i);
+  assert.match(forcedColorsRules, /forced-color-adjust:\s*none/i);
 });
